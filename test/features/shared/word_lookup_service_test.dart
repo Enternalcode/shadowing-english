@@ -3,8 +3,23 @@ import 'dart:convert';
 import 'package:common_learn_english/features/settings/presentation/settings_provider.dart';
 import 'package:common_learn_english/features/shared/data/word_lookup_service.dart';
 import 'package:common_learn_english/features/shared/domain/word_lookup_entry.dart';
+import 'package:common_learn_english/features/words/data/offline_word_dictionary.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _FakeOfflineDictionary extends OfflineWordDictionary {
+  @override
+  Future<OfflineWordDefinition?> lookup(String rawWord) async {
+    if (rawWord == 'dedicated') {
+      return const OfflineWordDefinition(
+        translation: 'a. 专注的, 献身的',
+        phonetic: "'dedikeitid",
+        partOfSpeech: '',
+      );
+    }
+    return null;
+  }
+}
 
 void main() {
   group('batch subtitle translation', () {
@@ -219,7 +234,7 @@ void main() {
     );
 
     expect(entry.sourceLabel, '未配置');
-    expect(entry.definitionCn, '翻译服务当前不可用，请检查 API 配置后重试。');
+    expect(entry.definitionCn, '翻译服务不可用，本地词典也未收录该词。');
   });
 
   test('shows setup message when api key is missing', () async {
@@ -253,8 +268,62 @@ void main() {
 
     expect(remoteCallCount, 0);
     expect(entry.sourceLabel, '未配置');
-    expect(entry.definitionCn, '请先在设置中配置可用的翻译 API。');
+    expect(entry.definitionCn, '本地词典未收录该词，可在设置中配置翻译 API 获取完整释义。');
   });
+
+  test('serves the offline dictionary when no api key is configured', () async {
+    int remoteCallCount = 0;
+    final WordLookupService service = WordLookupService(
+      offlineDictionary: _FakeOfflineDictionary(),
+      remoteLookupOverride:
+          ({
+            required String rawWord,
+            String? contextSentence,
+            required LearningSettingsState settings,
+          }) async {
+            remoteCallCount += 1;
+            throw StateError('remote must not run');
+          },
+    );
+
+    final WordLookupEntry entry = await service.lookupWord(
+      rawWord: 'dedicated',
+      settings: LearningSettingsState.defaults(),
+    );
+
+    expect(remoteCallCount, 0);
+    expect(entry.sourceLabel, '离线词典');
+    expect(entry.definitionCn, 'a. 专注的, 献身的');
+    expect(entry.phonetic, "'dedikeitid");
+  });
+
+  test(
+    'falls back to the offline dictionary when remote lookup fails',
+    () async {
+      final WordLookupService service = WordLookupService(
+        offlineDictionary: _FakeOfflineDictionary(),
+        remoteLookupOverride:
+            ({
+              required String rawWord,
+              String? contextSentence,
+              required LearningSettingsState settings,
+            }) async => throw Exception('boom'),
+      );
+
+      final WordLookupEntry entry = await service.lookupWord(
+        rawWord: 'dedicated',
+        settings: LearningSettingsState.defaults().copyWith(
+          translationProvider: 'OpenAI',
+          translationApiKey: 'demo-key',
+          translationBaseUrl: 'https://api.openai.com/v1',
+          translationModel: 'gpt-4o-mini',
+        ),
+      );
+
+      expect(entry.sourceLabel, '离线词典');
+      expect(entry.definitionCn, 'a. 专注的, 献身的');
+    },
+  );
 
   test('uses google translate direct provider when configured', () async {
     final WordLookupService service = WordLookupService(
@@ -420,7 +489,7 @@ void main() {
     );
     expect(requestCount, 0);
     expect(localEntry.sourceLabel, '未配置');
-    expect(localEntry.definitionCn, '请先在设置中配置可用的翻译 API。');
+    expect(localEntry.definitionCn, '本地词典未收录该词，可在设置中配置翻译 API 获取完整释义。');
 
     final WordLookupEntry entry = await service.lookupWord(
       rawWord: 'chaotic',

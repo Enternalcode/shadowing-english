@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../settings/presentation/settings_provider.dart';
+import '../../words/data/offline_word_dictionary.dart';
 import '../domain/word_lookup_entry.dart';
 
 typedef WordLookupRemoteLookup =
@@ -24,16 +25,22 @@ typedef WordLookupHttpRequest =
     });
 
 final Provider<WordLookupService> wordLookupServiceProvider =
-    Provider<WordLookupService>((Ref ref) => const WordLookupService());
+    Provider<WordLookupService>(
+      (Ref ref) => WordLookupService(
+        offlineDictionary: ref.watch(offlineWordDictionaryProvider),
+      ),
+    );
 
 class WordLookupService {
   const WordLookupService({
     this.remoteLookupOverride,
     this.httpRequestOverride,
+    this.offlineDictionary,
   });
 
   final WordLookupRemoteLookup? remoteLookupOverride;
   final WordLookupHttpRequest? httpRequestOverride;
+  final OfflineWordDictionary? offlineDictionary;
 
   Future<WordLookupEntry> lookupWord({
     required String rawWord,
@@ -42,11 +49,14 @@ class WordLookupService {
   }) async {
     final String normalizedWord = _normalizeWord(rawWord);
     if (!_canUseRemoteProvider(settings)) {
-      return _buildUnavailableEntry(
-        rawWord: normalizedWord,
-        messageCn: '请先在设置中配置可用的翻译 API。',
-        messageEn: 'Set up a translation API in Settings first.',
-      );
+      return await _lookupOffline(normalizedWord) ??
+          _buildUnavailableEntry(
+            rawWord: normalizedWord,
+            messageCn: '本地词典未收录该词，可在设置中配置翻译 API 获取完整释义。',
+            messageEn:
+                'Not in the local dictionary. Configure a translation API in '
+                'Settings for a full definition.',
+          );
     }
     try {
       return remoteLookupOverride != null
@@ -61,13 +71,40 @@ class WordLookupService {
               settings: settings,
             );
     } catch (_) {
-      return _buildUnavailableEntry(
-        rawWord: normalizedWord,
-        messageCn: '翻译服务当前不可用，请检查 API 配置后重试。',
-        messageEn:
-            'Translation API is unavailable. Check your API settings and try again.',
-      );
+      return await _lookupOffline(normalizedWord) ??
+          _buildUnavailableEntry(
+            rawWord: normalizedWord,
+            messageCn: '翻译服务不可用，本地词典也未收录该词。',
+            messageEn:
+                'Translation API unavailable and the word is not in the '
+                'local dictionary.',
+          );
     }
+  }
+
+  /// ECDICT core fallback: phonetic + POS + Chinese gloss with zero
+  /// configuration, so lookups keep working offline.
+  Future<WordLookupEntry?> _lookupOffline(String normalizedWord) async {
+    final OfflineWordDictionary? dictionary = offlineDictionary;
+    if (dictionary == null) {
+      return null;
+    }
+    final OfflineWordDefinition? definition = await dictionary.lookup(
+      normalizedWord,
+    );
+    if (definition == null || definition.translation.trim().isEmpty) {
+      return null;
+    }
+    return WordLookupEntry(
+      word: _displayWord(normalizedWord),
+      phonetic: definition.phonetic,
+      type: '英文单词',
+      definitionEn: '',
+      usageEn: '',
+      exampleSentenceEn: '',
+      definitionCn: definition.translation,
+      sourceLabel: '离线词典',
+    );
   }
 
   Future<String?> translateSentence({
