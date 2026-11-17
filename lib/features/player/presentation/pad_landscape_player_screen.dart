@@ -8,7 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../router/app_router.dart';
-import '../../dictation/presentation/dictation_session_dialog.dart';
+import '../../dictation/presentation/dictation_panel.dart';
 import '../../guide/presentation/guide_screen.dart';
 import '../../home/presentation/learning_dashboard_provider.dart';
 import '../../lessons/domain/intensive_lesson.dart';
@@ -108,6 +108,8 @@ class PadLandscapePlayerScreenState
   bool _isFullscreenOpen = false;
   bool _pronunciationDialogActive = false;
   bool _lessonDialogActive = false;
+  bool _dictationActive = false;
+  int _dictationIndex = 0;
   bool _generatingAiSubtitles = false;
   AsrSubtitleCancellationToken? _aiSubtitleCancellationToken;
   double? _aiSubtitleProgressValue;
@@ -1099,7 +1101,14 @@ class PadLandscapePlayerScreenState
                           children: <Widget>[
                             Expanded(
                               child: state.hasLines
-                                  ? PlayerTranscriptPanel(
+                                  ? _dictationActive
+                                        ? DictationPanel(
+                                            lines: _dictationLines,
+                                            startIndex: _dictationIndex,
+                                            onPlayLine: _playDictationLine,
+                                            onExit: _exitDictation,
+                                          )
+                                        : PlayerTranscriptPanel(
                                       lessonPanel: EpisodeLessonList(
                                         episodeId: widget.episodeId,
                                         onOpen: (IntensiveLesson lesson) =>
@@ -1760,23 +1769,26 @@ class PadLandscapePlayerScreenState
       _showMessage('没有可练的字幕行');
       return;
     }
-    final List<DictationLine> lines = state.lines
-        .map(
-          (PlayerSubtitleLine l) =>
-              DictationLine(english: l.english, chinese: l.chinese),
-        )
-        .toList(growable: false);
-    unawaited(
-      showDialog<void>(
-        context: context,
-        builder: (_) => DictationSessionDialog(
-          lines: lines,
-          startIndex: index,
-          onPlayLine: _playDictationLine,
-        ),
-      ),
-    );
+    setState(() {
+      _dictationActive = true;
+      _dictationIndex = index;
+    });
+    _playDictationLine(index);
   }
+
+  void _exitDictation() {
+    setState(() => _dictationActive = false);
+    if (state.isLooping) {
+      _handleClearLoop();
+    }
+  }
+
+  List<DictationLine> get _dictationLines => state.lines
+      .map(
+        (PlayerSubtitleLine l) =>
+            DictationLine(english: l.english, chinese: l.chinese),
+      )
+      .toList(growable: false);
 
   void _playDictationLine(int index) {
     setState(() {
