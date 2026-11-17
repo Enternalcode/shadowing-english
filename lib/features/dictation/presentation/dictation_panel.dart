@@ -348,7 +348,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             ],
           ),
         ),
-      ),
+      ).then((_) => _focusNode.requestFocus()),
     );
   }
 
@@ -407,7 +407,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               const Spacer(),
               _SubtitleToggle(
                 visible: _showSubtitles,
-                onChanged: (bool v) => setState(() => _showSubtitles = v),
+                onChanged: (bool v) {
+                  setState(() => _showSubtitles = v);
+                  _focusNode.requestFocus();
+                },
               ),
               IconButton(
                 tooltip: '上一句',
@@ -442,8 +445,8 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             _checked
                 ? '继续输入可重新校验，Enter 下一句'
                 : _showSubtitles
-                ? '听音频输入当前句（当前句已遮蔽）；Enter 校验 · Tab 重播'
-                : '盲听输入，可以不打空格；Enter 校验 · Tab 重播 · Shift+Tab 上一句',
+                ? '听音后直接敲键盘（错键会弹回）；Enter 校验 · Tab 重播'
+                : '盲听后直接敲键盘，错键会自动弹回；Enter 校验 · Tab 重播 · Shift+Tab 上一句',
             style: const TextStyle(
               fontSize: 12,
               color: AppDesignTokens.textSecondary,
@@ -472,18 +475,26 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             ),
             const SizedBox(height: 8),
           ],
-          TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            autofocus: true,
-            autocorrect: false,
-            enableSuggestions: false,
-            onChanged: _onInputChanged,
-            onSubmitted: (_) => _primaryAction(),
-            decoration: const InputDecoration(
-              hintText: '输入听到的内容…',
-              border: OutlineInputBorder(),
-              isDense: true,
+          // Invisible keyboard proxy: keeps focus and captures keystrokes
+          // while the slot row above is the visible input surface (like
+          // qwerty-learner's type-on-the-slots feel).
+          SizedBox(
+            height: 0,
+            child: Opacity(
+              opacity: 0,
+              child: IgnorePointer(
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  showCursor: false,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  onChanged: _onInputChanged,
+                  onSubmitted: (_) => _primaryAction(),
+                  decoration: const InputDecoration.collapsed(hintText: ''),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -492,7 +503,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               TextButton.icon(
                 onPressed: _showAnswer
                     ? null
-                    : () => setState(() => _hintLetters = !_hintLetters),
+                    : () {
+                        setState(() => _hintLetters = !_hintLetters);
+                        _focusNode.requestFocus();
+                      },
                 icon: const Icon(Icons.abc_rounded, size: 18),
                 label: Text(_hintLetters ? '收回提示' : '提示首字母'),
               ),
@@ -502,6 +516,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                     _showAnswer = !_showAnswer;
                     if (_showAnswer) _revealed.add(_index);
                   });
+                  _focusNode.requestFocus();
                 },
                 icon: const Icon(Icons.visibility_outlined, size: 18),
                 label: Text(_showAnswer ? '隐藏答案' : '显示答案'),
@@ -567,7 +582,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         Expanded(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => widget.onPlayLine(_index),
+            onTap: () {
+              _focusNode.requestFocus();
+              widget.onPlayLine(_index);
+            },
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -603,7 +621,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               OutlinedButton.icon(
-                onPressed: () => widget.onPlayLine(_index),
+                onPressed: () {
+                  _focusNode.requestFocus();
+                  widget.onPlayLine(_index);
+                },
                 icon: const Icon(Icons.replay_rounded, size: 18),
                 label: const Text('重播 (Tab)'),
               ),
