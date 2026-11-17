@@ -329,7 +329,8 @@ class AsrSubtitleService {
           ],
         },
       ],
-      'asr_options': <String, Object?>{'language': 'auto'},
+      if (settings.asrProvider != 'StepFun')
+        'asr_options': <String, Object?>{'language': 'auto'},
       'stream': false,
     };
 
@@ -1003,7 +1004,9 @@ class AsrSubtitleService {
 
   bool _usesMimoChatAsr(LearningSettingsState settings) {
     return settings.asrProvider == 'MiMo Token Plan' ||
-        settings.asrModel.toLowerCase().startsWith('mimo-v2.5-asr');
+        settings.asrProvider == 'StepFun' ||
+        settings.asrModel.toLowerCase().startsWith('mimo-v2.5-asr') ||
+        settings.asrModel.toLowerCase().startsWith('stepaudio');
   }
 
   bool _usesAlibabaCloudAsr(LearningSettingsState settings) {

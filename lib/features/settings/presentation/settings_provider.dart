@@ -105,8 +105,8 @@ const Map<String, TranslationProviderPreset> translationProviderPresets =
       ),
       'StepFun': TranslationProviderPreset(
         name: 'StepFun',
-        baseUrl: 'https://api.stepfun.com/step_plan/v1',
-        model: 'step-5-preview',
+        baseUrl: 'https://api.stepfun.com/v1',
+        model: 'stepaudio-3-chat-preview',
       ),
       'Google 翻译': TranslationProviderPreset(
         name: 'Google 翻译',
@@ -139,8 +139,8 @@ const Map<String, TranslationProviderPreset> asrProviderPresets =
       ),
       'StepFun': TranslationProviderPreset(
         name: 'StepFun',
-        baseUrl: 'https://api.stepfun.com/step_plan/v1',
-        model: 'stepaudio-3-asr-max',
+        baseUrl: 'https://api.stepfun.com/v1',
+        model: 'stepaudio-3-chat-preview',
       ),
     };
 
