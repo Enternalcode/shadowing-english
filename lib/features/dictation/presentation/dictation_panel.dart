@@ -58,7 +58,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   final Map<int, int> _lineBest = <int, int>{};
   int _streak = 0;
   int _lastDelta = 0;
-  double _sfxVolume = 80;
+  double _keyVolume = 90;
+  double _sfxVolume = 90;
+  int _prevLetterCount = 0;
+  int? _rejectedAt;
+  Timer? _rejectTimer;
   final Player _sfx = Player();
   final Player _keySfx = Player();
   final Player _keyErr = Player();
@@ -79,9 +83,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     if (_pos < 0) _pos = 0;
     unawaited(_applyVolume());
     unawaited(
-      _keySfx.open(Media('asset:///assets/sfx/click.wav'), play: false),
+      _keySfx.open(Media('asset:///assets/sfx/qw_click.wav'), play: false),
     );
-    unawaited(_keyErr.open(Media('asset:///assets/sfx/err.wav'), play: false));
+    unawaited(
+      _keyErr.open(Media('asset:///assets/sfx/qw_beep.wav'), play: false),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPos(_pos));
     _refreshToday();
   }
@@ -96,6 +102,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
   @override
   void dispose() {
+    _rejectTimer?.cancel();
     unawaited(_keyErr.dispose());
     unawaited(_keySfx.dispose());
     unawaited(_sfx.dispose());
@@ -120,6 +127,9 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       _score = null;
       _lastDelta = 0;
       _controller.clear();
+      _prevLetterCount = 0;
+      _rejectedAt = null;
+      _rejectTimer?.cancel();
     });
     widget.onPlayLine(_order[pos]);
     _focusNode.requestFocus();
@@ -220,9 +230,74 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   }
 
   Future<void> _applyVolume() async {
-    await _sfx.setVolume(_sfxVolume);
-    await _keySfx.setVolume(_sfxVolume);
+    await _keySfx.setVolume(_keyVolume);
     await _keyErr.setVolume(_sfxVolume);
+    await _sfx.setVolume(_sfxVolume);
+  }
+
+  /// qwerty-learner feel: every accepted letter clicks into its slot; the
+  /// first wrong letter beeps, shows red ~240ms, then the input rolls back
+  /// to just before it so the letter has to be re-typed.
+  void _onInputChanged(String _) {
+    final String raw = _controller.text;
+    final String typedL = _lettersOf(raw);
+    final String expL = _lettersOf(_line.english);
+    if (_checked) _checked = false;
+
+    int? wrongAt;
+    for (int i = 0; i < typedL.length; i++) {
+      if (i >= expL.length ||
+          typedL[i].toLowerCase() != expL[i].toLowerCase()) {
+        wrongAt = i;
+        break;
+      }
+    }
+
+    if (wrongAt != null) {
+      _keySound(false);
+      if (_rejectedAt != wrongAt) {
+        _rejectedAt = wrongAt;
+        _rejectTimer?.cancel();
+        _rejectTimer = Timer(
+          const Duration(milliseconds: 240),
+          _rollbackRejection,
+        );
+      }
+    } else {
+      _rejectedAt = null;
+      _rejectTimer?.cancel();
+      if (typedL.length > _prevLetterCount) _keySound(true);
+    }
+    _prevLetterCount = typedL.length;
+    setState(() {});
+    if (wrongAt == null && typedL.isNotEmpty && typedL.length == expL.length) {
+      _check();
+    }
+  }
+
+  void _rollbackRejection() {
+    final int? at = _rejectedAt;
+    _rejectedAt = null;
+    if (at == null) return;
+    final String raw = _controller.text;
+    final String keep = raw.substring(0, _rawIndexOfLetter(raw, at));
+    _controller.value = TextEditingValue(
+      text: keep,
+      selection: TextSelection.collapsed(offset: keep.length),
+    );
+    setState(() {});
+  }
+
+  /// Raw-string index of the (letterIdx)-th letter/digit, or raw.length.
+  static int _rawIndexOfLetter(String raw, int letterIdx) {
+    int seen = 0;
+    for (int i = 0; i < raw.length; i++) {
+      if (_isLetterRune(raw.codeUnitAt(i))) {
+        if (seen == letterIdx) return i;
+        seen++;
+      }
+    }
+    return raw.length;
   }
 
   void _showVolumeDialog() {
@@ -233,17 +308,36 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
           builder: (BuildContext context, StateSetter setD) => AlertDialog(
             title: const Text('音效音量'),
             content: SizedBox(
-              width: 280,
-              child: Slider(
-                value: _sfxVolume,
-                max: 100,
-                divisions: 20,
-                label: '${_sfxVolume.round()}',
-                onChanged: (double v) {
-                  setD(() => _sfxVolume = v);
-                  setState(() {});
-                  unawaited(_applyVolume());
-                },
+              width: 300,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Text('打字音效', style: TextStyle(fontSize: 13)),
+                  Slider(
+                    value: _keyVolume,
+                    max: 100,
+                    divisions: 20,
+                    label: '${_keyVolume.round()}',
+                    onChanged: (double v) {
+                      setD(() => _keyVolume = v);
+                      setState(() {});
+                      unawaited(_applyVolume());
+                    },
+                  ),
+                  const Text('反馈音效（对错/判分）', style: TextStyle(fontSize: 13)),
+                  Slider(
+                    value: _sfxVolume,
+                    max: 100,
+                    divisions: 20,
+                    label: '${_sfxVolume.round()}',
+                    onChanged: (double v) {
+                      setD(() => _sfxVolume = v);
+                      setState(() {});
+                      unawaited(_applyVolume());
+                    },
+                  ),
+                ],
               ),
             ),
             actions: <Widget>[
@@ -384,26 +478,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             autofocus: true,
             autocorrect: false,
             enableSuggestions: false,
-            onChanged: (_) {
-              final String typedL = _lettersOf(_controller.text);
-              final String expL = _lettersOf(_line.english);
-              if (_checked) {
-                setState(() => _checked = false);
-              } else {
-                setState(() {});
-              }
-              if (typedL.isNotEmpty) {
-                final int i = typedL.length - 1;
-                _keySound(
-                  i < expL.length &&
-                      typedL[i].toLowerCase() == expL[i].toLowerCase(),
-                );
-              }
-              if (typedL.length == expL.length &&
-                  typedL.toLowerCase() == expL.toLowerCase()) {
-                _check();
-              }
-            },
+            onChanged: _onInputChanged,
             onSubmitted: (_) => _primaryAction(),
             decoration: const InputDecoration(
               hintText: '输入听到的内容…',
@@ -763,9 +838,22 @@ class _SlotLine extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: border, width: 2)),
       ),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 110),
+        transitionBuilder: (Widget child, Animation<double> a) =>
+            ScaleTransition(
+              scale: a,
+              child: FadeTransition(opacity: a, child: child),
+            ),
+        child: Text(
+          text,
+          key: ValueKey<String>('$idx:$text'),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: fg,
+          ),
+        ),
       ),
     );
   }
