@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -111,6 +112,7 @@ class _PadPortraitPlayerScreenState
   bool _dictationActive = false;
   int _dictationIndex = 0;
   int? _dictationStopAtMs;
+  bool _dictationLooping = false;
   AsrSubtitleCancellationToken? _aiSubtitleCancellationToken;
   double? _aiSubtitleProgressValue;
   String? _aiSubtitleProgressText;
@@ -217,6 +219,11 @@ class _PadPortraitPlayerScreenState
         ref.read(lastLearningEpisodeProvider.notifier).record(widget.episodeId);
       });
     }
+    if (Hive.isBoxOpen('prefs')) {
+      final String savedSpeed =
+          Hive.box<String>('prefs').get('player_speed') ?? '1.0×';
+      state.selectSpeed(savedSpeed);
+    }
     await _initVideo();
     if (!mounted) {
       return;
@@ -224,6 +231,22 @@ class _PadPortraitPlayerScreenState
     setState(() {
       _isBootstrapping = false;
     });
+    _maybeAutoEnterDictation();
+  }
+
+  /// Default practice flow: dictation opens automatically at the saved
+  /// (or default 1.0x) speed, looping the current sentence until typing.
+  void _maybeAutoEnterDictation() {
+    if (!state.hasLines || _videoPlayer == null || !mounted) return;
+    final bool autoEnter =
+        !Hive.isBoxOpen('prefs') ||
+        (Hive.box<String>('prefs').get('dictation_auto_enter') ?? 'true') ==
+            'true';
+    if (autoEnter) {
+      _handleDictationLine(
+        state.activeLineIndex < 0 ? 0 : state.activeLineIndex,
+      );
+    }
   }
 
   Future<void> _initVideo() async {
@@ -517,7 +540,11 @@ class _PadPortraitPlayerScreenState
         _dictationStopAtMs != null &&
         position.inMilliseconds >= _dictationStopAtMs!) {
       _dictationStopAtMs = null;
-      _stopVideo();
+      if (_dictationLooping) {
+        _playDictationLine(_dictationIndex);
+      } else {
+        _stopVideo();
+      }
     }
     _syncTranscriptReader();
 
@@ -1083,6 +1110,8 @@ class _PadPortraitPlayerScreenState
                                         startIndex: _dictationIndex,
                                         onPlayLine: _playDictationLine,
                                         onExit: _exitDictation,
+                                        onTypingStarted:
+                                            _handleDictationTypingStarted,
                                         episodeId: widget.episodeId,
                                         course: course?.title ?? '未命名课程',
                                         episode: episode == null
@@ -1248,6 +1277,9 @@ class _PadPortraitPlayerScreenState
       state.selectSpeed(nextSpeed);
     });
     _applyPlaybackMode();
+    if (Hive.isBoxOpen('prefs')) {
+      unawaited(Hive.box<String>('prefs').put('player_speed', nextSpeed));
+    }
   }
 
   void _handleSetSubtitleMode(String mode) {
@@ -1775,6 +1807,7 @@ class _PadPortraitPlayerScreenState
     setState(() {
       _dictationActive = false;
       _dictationStopAtMs = null;
+      _dictationLooping = false;
     });
     if (state.isLooping) {
       _handleClearLoop();
@@ -1800,11 +1833,20 @@ class _PadPortraitPlayerScreenState
       state
         ..selectLine(index)
         ..isPlaying = true;
+      _dictationIndex = index;
       _dictationStopAtMs = state.videoEndMsForLine(index);
+      _dictationLooping = true;
     });
     _syncTranscriptReader();
     _seekToActiveLine();
     _applyPlaybackMode();
+  }
+
+  /// The sentence loops while the learner listens; the first keystroke
+  /// pauses it so typing happens in silence.
+  void _handleDictationTypingStarted() {
+    _dictationLooping = false;
+    _stopVideo();
   }
 
   void _handleAiExplain(int index) => unawaited(_openLesson(index: index));

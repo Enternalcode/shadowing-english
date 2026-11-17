@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../phrases/presentation/phrase_book_provider.dart';
@@ -40,6 +41,7 @@ class DictationPanel extends ConsumerStatefulWidget {
     this.episodeId = '',
     this.course = '',
     this.episode = '',
+    this.onTypingStarted,
     super.key,
   });
 
@@ -50,6 +52,7 @@ class DictationPanel extends ConsumerStatefulWidget {
   final String episodeId;
   final String course;
   final String episode;
+  final VoidCallback? onTypingStarted;
 
   @override
   ConsumerState<DictationPanel> createState() => _DictationPanelState();
@@ -100,6 +103,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     _order = List<int>.generate(widget.lines.length, (int i) => i);
     _pos = _order.indexOf(widget.startIndex.clamp(0, widget.lines.length - 1));
     if (_pos < 0) _pos = 0;
+    _loadVolumes();
     unawaited(_applyVolume());
     unawaited(
       _keySfx.open(Media('asset:///assets/sfx/qw_click.wav'), play: false),
@@ -254,6 +258,25 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     await _sfx.setVolume(_sfxVolume);
   }
 
+  void _loadVolumes() {
+    if (!Hive.isBoxOpen('prefs')) return;
+    final Box<String> prefs = Hive.box<String>('prefs');
+    _keyVolume =
+        double.tryParse(prefs.get('dictation_key_volume') ?? '') ?? _keyVolume;
+    _sfxVolume =
+        double.tryParse(prefs.get('dictation_sfx_volume') ?? '') ?? _sfxVolume;
+  }
+
+  void _saveVolumes() {
+    if (!Hive.isBoxOpen('prefs')) return;
+    unawaited(
+      Hive.box<String>('prefs').putAll(<String, String>{
+        'dictation_key_volume': '$_keyVolume',
+        'dictation_sfx_volume': '$_sfxVolume',
+      }),
+    );
+  }
+
   /// qwerty-learner feel: every accepted letter clicks into its slot; the
   /// first wrong letter beeps, shows red ~240ms, then the input rolls back
   /// to just before it so the letter has to be re-typed.
@@ -261,7 +284,28 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     final String raw = _controller.text;
     final String typedL = _lettersOf(raw);
     final String expL = _lettersOf(_line.english);
-    if (_checked) _checked = false;
+    if (_checked) {
+      _checked = false;
+      _score = null;
+    }
+
+    // Reinforcement pass: once the sentence is fully typed, the next
+    // keystroke starts it over (qwerty-learner lets you retype a word).
+    if (expL.isNotEmpty &&
+        _prevLetterCount == expL.length &&
+        typedL.length > expL.length) {
+      final String rest = typedL.substring(expL.length);
+      _prevLetterCount = 0;
+      _controller.value = TextEditingValue(
+        text: rest,
+        selection: TextSelection.collapsed(offset: rest.length),
+      );
+      return;
+    }
+
+    if (_prevLetterCount == 0 && typedL.isNotEmpty) {
+      widget.onTypingStarted?.call();
+    }
 
     int? wrongAt;
     for (int i = 0; i < typedL.length; i++) {
@@ -426,6 +470,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       text: keep,
       selection: TextSelection.collapsed(offset: keep.length),
     );
+    _prevLetterCount = _lettersOf(keep).length;
     setState(() {});
   }
 
@@ -464,6 +509,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                       setD(() => _keyVolume = v);
                       setState(() {});
                       unawaited(_applyVolume());
+                      _saveVolumes();
                     },
                   ),
                   const Text('反馈音效（对错/判分）', style: TextStyle(fontSize: 13)),
@@ -476,6 +522,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                       setD(() => _sfxVolume = v);
                       setState(() {});
                       unawaited(_applyVolume());
+                      _saveVolumes();
                     },
                   ),
                 ],
@@ -742,6 +789,9 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                     typed: _controller.text,
                     reveal: _showAnswer,
                     showFirstLetters: _hintLetters,
+                    cursorIndex: _checked || _showAnswer
+                        ? -1
+                        : _lettersOf(_controller.text).length,
                     onWordTap: _showWordLookup,
                   ),
                   const SizedBox(height: 10),
@@ -969,6 +1019,7 @@ class _SlotLine extends StatelessWidget {
     required this.typed,
     this.reveal = false,
     this.showFirstLetters = false,
+    this.cursorIndex = -1,
     this.onWordTap,
   });
 
@@ -976,6 +1027,7 @@ class _SlotLine extends StatelessWidget {
   final String typed;
   final bool reveal;
   final bool showFirstLetters;
+  final int cursorIndex;
   final ValueChanged<String>? onWordTap;
 
   static const Color _ok = Color(0xFF1A7F37);
@@ -1049,33 +1101,80 @@ class _SlotLine extends StatelessWidget {
       fg = _hint;
       border = _hint;
     }
+    final bool atCursor =
+        idx == cursorIndex && idx >= typedLetters.length && !reveal;
     return Container(
       width: 15,
       height: 24,
       margin: const EdgeInsets.symmetric(horizontal: 0.5),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: border, width: 2)),
-      ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 110),
-        transitionBuilder: (Widget child, Animation<double> a) =>
-            ScaleTransition(
-              scale: a,
-              child: FadeTransition(opacity: a, child: child),
-            ),
-        child: Text(
-          text,
-          key: ValueKey<String>('$idx:$text'),
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color: fg,
+        border: Border(
+          bottom: BorderSide(
+            color: atCursor ? const Color(0xFF46A302) : border,
+            width: 2,
           ),
         ),
       ),
+      child: atCursor
+          ? const _BlinkCaret()
+          : AnimatedSwitcher(
+              duration: const Duration(milliseconds: 110),
+              transitionBuilder: (Widget child, Animation<double> a) =>
+                  ScaleTransition(
+                    scale: a,
+                    child: FadeTransition(opacity: a, child: child),
+                  ),
+              child: Text(
+                text,
+                key: ValueKey<String>('$idx:$text'),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: fg,
+                ),
+              ),
+            ),
     );
   }
+}
+
+/// Blinking vertical bar marking the next slot to fill, like the caret in
+/// a text field - makes the current input position obvious at a glance.
+class _BlinkCaret extends StatefulWidget {
+  const _BlinkCaret();
+
+  @override
+  State<_BlinkCaret> createState() => _BlinkCaretState();
+}
+
+class _BlinkCaretState extends State<_BlinkCaret> {
+  late final Timer _timer = Timer.periodic(const Duration(milliseconds: 530), (
+    _,
+  ) {
+    if (mounted) setState(() => _visible = !_visible);
+  });
+  bool _visible = true;
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedOpacity(
+    opacity: _visible ? 1 : 0.12,
+    duration: const Duration(milliseconds: 120),
+    child: Container(
+      width: 2,
+      height: 16,
+      decoration: BoxDecoration(
+        color: const Color(0xFF46A302),
+        borderRadius: BorderRadius.circular(1),
+      ),
+    ),
+  );
 }
 
 class _SubtitleToggle extends StatelessWidget {
