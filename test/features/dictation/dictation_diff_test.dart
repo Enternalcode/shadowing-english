@@ -26,6 +26,40 @@ void main() {
     );
   });
 
+  test('one-letter-off substitution is marked near, not wrong', () {
+    final DictationScore score = scoreDictation(
+      answer,
+      'It pairs with our companion apps',
+    );
+    // 'apps' vs 'app' is a single-edit miss on a 3+ letter word → near.
+    expect(
+      score.userRow.any(
+        (MarkedWord w) => w.mark == WordMark.near && w.text == 'apps',
+      ),
+      isTrue,
+    );
+    expect(
+      score.answerRow.any(
+        (MarkedWord w) => w.mark == WordMark.near && w.text == 'app',
+      ),
+      isTrue,
+    );
+    // Still an error: not counted correct, recorded for review.
+    expect(score.correct, 5);
+    expect(score.wrongWords, contains('app'));
+  });
+
+  test('far substitution stays wrong', () {
+    final DictationScore score = scoreDictation(
+      answer,
+      'It pairs with you companion app',
+    );
+    expect(
+      score.userRow.every((MarkedWord w) => w.mark != WordMark.near),
+      isTrue,
+    );
+  });
+
   test('missing word does not shift later words', () {
     final DictationScore score = scoreDictation(
       answer,

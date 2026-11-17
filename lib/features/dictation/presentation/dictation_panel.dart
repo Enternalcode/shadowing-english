@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/presentation/pad/app_design_tokens.dart';
@@ -44,10 +45,12 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   bool _checked = false;
   bool _showAnswer = false;
   bool _showSubtitles = false;
+  bool _hintLetters = false;
   bool _finished = false;
   DictationScore? _score;
   DictationDayStats? _today;
   final Set<int> _revealed = <int>{};
+  Timer? _autoAdvance;
 
   int _sessionAttempts = 0;
   int _sessionCorrect = 0;
@@ -75,6 +78,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
   @override
   void dispose() {
+    _autoAdvance?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -88,10 +92,12 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   }
 
   void _openLine(int index) {
+    _autoAdvance?.cancel();
     setState(() {
       _index = index;
       _checked = false;
       _showAnswer = false;
+      _hintLetters = false;
       _score = null;
       _controller.clear();
     });
@@ -139,6 +145,13 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
           )
           .then((_) => _refreshToday()),
     );
+    if (score.percent == 100) {
+      _autoAdvance = Timer(const Duration(milliseconds: 700), () {
+        if (mounted && _checked && _score?.percent == 100) {
+          _advance();
+        }
+      });
+    }
     _focusNode.requestFocus();
   }
 
@@ -156,9 +169,17 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   }
 
   Widget _buildSession() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.tab): () =>
+            widget.onPlayLine(_index),
+        const SingleActivator(LogicalKeyboardKey.tab, shift: true): () {
+          if (_index > 0) _openLine(_index - 1);
+        },
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
         Row(
           children: <Widget>[
             const Text(
@@ -201,10 +222,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         ),
         Text(
           _checked
-              ? '继续输入可重新校验，Enter 进入下一句'
+              ? '继续输入可重新校验，Enter 下一句'
               : _showSubtitles
-              ? '听音频输入当前句（当前句已遮蔽），Enter 校验'
-              : '盲听输入句子，可以不打空格；Enter 校验',
+              ? '听音频输入当前句（当前句已遮蔽）；Enter 校验 · Tab 重播'
+              : '盲听输入，可以不打空格；Enter 校验 · Tab 重播 · Shift+Tab 上一句',
           style: const TextStyle(
             fontSize: 12,
             color: AppDesignTokens.textSecondary,
@@ -243,6 +264,13 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         Row(
           children: <Widget>[
             TextButton.icon(
+              onPressed: _showAnswer
+                  ? null
+                  : () => setState(() => _hintLetters = !_hintLetters),
+              icon: const Icon(Icons.abc_rounded, size: 18),
+              label: Text(_hintLetters ? '收回提示' : '提示首字母'),
+            ),
+            TextButton.icon(
               onPressed: () {
                 setState(() {
                   _showAnswer = !_showAnswer;
@@ -267,7 +295,8 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               : (_sessionCorrect * 100 / _sessionTotal).round(),
           today: _today,
         ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -318,21 +347,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             color: AppDesignTokens.textSecondary,
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            alignment: WrapAlignment.center,
-            children: <Widget>[
-              for (int i = 0; i < wordCount; i++)
-                Container(
-                  width: 18,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-            ],
+          _MaskedText(
+            line: _line.english,
+            active: true,
+            showLetters: _hintLetters,
           ),
           const SizedBox(height: 10),
           Text(
@@ -386,7 +404,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       if (masked)
-                        _MaskedText(line: line.english, active: active)
+                        _MaskedText(
+                          line: line.english,
+                          active: active,
+                          showLetters: _hintLetters,
+                        )
                       else
                         Text(
                           line.english,
@@ -523,19 +545,45 @@ class _SubtitleToggle extends StatelessWidget {
 }
 
 class _MaskedText extends StatelessWidget {
-  const _MaskedText({required this.line, required this.active});
+  const _MaskedText({
+    required this.line,
+    required this.active,
+    this.showLetters = false,
+  });
 
   final String line;
   final bool active;
+  final bool showLetters;
 
   @override
   Widget build(BuildContext context) {
-    final int wordCount = dictationTokens(line).length;
+    final List<String> toks = dictationTokens(line);
+    if (showLetters) {
+      final Color c = active
+          ? const Color(0xFF2563EB)
+          : AppDesignTokens.textSecondary;
+      return Wrap(
+        spacing: 10,
+        runSpacing: 6,
+        children: <Widget>[
+          for (final String w in toks)
+            Text(
+              w.length == 1 ? w : '${w[0]}${'·' * (w.length - 1)}',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.5,
+                color: c,
+              ),
+            ),
+        ],
+      );
+    }
     return Wrap(
       spacing: 5,
       runSpacing: 5,
       children: <Widget>[
-        for (int i = 0; i < wordCount; i++)
+        for (int i = 0; i < toks.length; i++)
           Container(
             width: 16,
             height: 7,
@@ -646,6 +694,15 @@ class _DiffRow extends StatelessWidget {
         );
       case WordMark.wrong:
         return Text(w.text, style: base.copyWith(color: _wrong));
+      case WordMark.near:
+        return Text(
+          w.text,
+          style: base.copyWith(
+            color: _miss,
+            decoration: TextDecoration.underline,
+            decorationColor: _miss,
+          ),
+        );
       case WordMark.miss:
         return Text(
           w.text,

@@ -14,7 +14,7 @@ class DictationOp {
   final int uj;
 }
 
-enum WordMark { ok, wrong, miss, extra }
+enum WordMark { ok, wrong, miss, extra, near }
 
 class MarkedWord {
   const MarkedWord(this.text, this.mark);
@@ -120,6 +120,11 @@ int _levenshtein(String a, String b) {
   return prev[m];
 }
 
+/// A substitution counts as "near" when it's one edit away on a word of 3+
+/// letters — close enough to deserve a softer colour than a plain miss.
+bool _isNearMiss(String user, String answer) =>
+    answer.length >= 3 && _levenshtein(user, answer) <= 1;
+
 /// Segments spaceless input against the known answer words, biased toward the
 /// answer — a local replacement for english-trainer's `/api/segment`.
 /// Returns one (possibly empty) segment per answer word, in order.
@@ -210,8 +215,11 @@ DictationScore scoreDictation(String answer, String input) {
         answerRow.add(MarkedWord(ansTok[idx], WordMark.ok));
         userRow.add(MarkedWord(seg, WordMark.ok));
       } else {
-        answerRow.add(MarkedWord(ansTok[idx], WordMark.wrong));
-        userRow.add(MarkedWord(seg, WordMark.wrong));
+        final bool near = _isNearMiss(seg, ansLow[idx]);
+        answerRow.add(
+          MarkedWord(ansTok[idx], near ? WordMark.near : WordMark.wrong),
+        );
+        userRow.add(MarkedWord(seg, near ? WordMark.near : WordMark.wrong));
         wrongWords.add(ansLow[idx]);
       }
     }
@@ -227,8 +235,13 @@ DictationScore scoreDictation(String answer, String input) {
           answerRow.add(MarkedWord(ansTok[op.ti], WordMark.ok));
           userRow.add(MarkedWord(uTok[op.uj], WordMark.ok));
         case DictationOpType.substitute:
-          answerRow.add(MarkedWord(ansTok[op.ti], WordMark.wrong));
-          userRow.add(MarkedWord(uTok[op.uj], WordMark.wrong));
+          final bool near = _isNearMiss(uLow[op.uj], ansLow[op.ti]);
+          answerRow.add(
+            MarkedWord(ansTok[op.ti], near ? WordMark.near : WordMark.wrong),
+          );
+          userRow.add(
+            MarkedWord(uTok[op.uj], near ? WordMark.near : WordMark.wrong),
+          );
           wrongWords.add(ansLow[op.ti]);
         case DictationOpType.delete:
           answerRow.add(MarkedWord(ansTok[op.ti], WordMark.miss));
