@@ -37,6 +37,7 @@ class DictationPanel extends ConsumerStatefulWidget {
     required this.lines,
     required this.onPlayLine,
     required this.onReplayLine,
+    required this.onPauseLine,
     required this.onExit,
     this.startIndex = 0,
     this.episodeId = '',
@@ -49,6 +50,7 @@ class DictationPanel extends ConsumerStatefulWidget {
   final List<DictationLine> lines;
   final void Function(int index) onPlayLine;
   final VoidCallback onReplayLine;
+  final VoidCallback onPauseLine;
   final VoidCallback onExit;
   final int startIndex;
   final String episodeId;
@@ -363,7 +365,9 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       return;
     }
 
-    if (_prevLetterCount == 0 && typedL.isNotEmpty) {
+    // Any accepted key pauses playback — the pad side treats the callback
+    // as "typing means silence now", not only the very first letter.
+    if (typedL.length > _prevLetterCount) {
       widget.onTypingStarted?.call();
     }
 
@@ -628,6 +632,8 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         },
         const SingleActivator(LogicalKeyboardKey.keyR, control: true):
             _retryLine,
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
+            widget.onPauseLine(),
       },
       child: Focus(
         focusNode: _focusNode,
@@ -661,9 +667,14 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                   icon: const Icon(Icons.skip_previous_rounded),
                 ),
                 IconButton(
-                  tooltip: '重播本句',
+                  tooltip: '重播本句 (Tab/空格)',
                   onPressed: widget.onReplayLine,
-                  icon: const Icon(Icons.volume_up_rounded),
+                  icon: const Icon(Icons.replay_rounded),
+                ),
+                IconButton(
+                  tooltip: '暂停音频 (Ctrl+P)',
+                  onPressed: widget.onPauseLine,
+                  icon: const Icon(Icons.pause_rounded),
                 ),
                 IconButton(
                   tooltip: '下一句',
@@ -719,7 +730,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               const SizedBox(height: 8),
             ],
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
                 TextButton.icon(
                   onPressed: _showAnswer
@@ -742,15 +756,12 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                   icon: const Icon(Icons.visibility_outlined, size: 18),
                   label: Text(_showAnswer ? '隐藏答案' : '显示答案'),
                 ),
-                const Spacer(),
-                if (_checked) ...<Widget>[
+                if (_checked)
                   OutlinedButton.icon(
                     onPressed: _retryLine,
                     icon: const Icon(Icons.edit_rounded, size: 16),
                     label: const Text('再练本句 (Ctrl+R)'),
                   ),
-                  const SizedBox(width: 8),
-                ],
                 FilledButton(
                   onPressed: _primaryAction,
                   child: Text(_checked ? '下一句 (Enter)' : '校验 (Enter)'),

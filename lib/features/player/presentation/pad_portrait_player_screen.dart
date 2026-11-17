@@ -113,6 +113,7 @@ class _PadPortraitPlayerScreenState
   int _dictationIndex = 0;
   int? _dictationStopAtMs;
   bool _dictationLooping = false;
+  bool _dictationAwaitingSeek = false;
   AsrSubtitleCancellationToken? _aiSubtitleCancellationToken;
   double? _aiSubtitleProgressValue;
   String? _aiSubtitleProgressText;
@@ -536,14 +537,21 @@ class _PadPortraitPlayerScreenState
         lineChanged = state.syncWithTimestamp(position.inMilliseconds);
       }
     });
-    if (_dictationActive &&
-        _dictationStopAtMs != null &&
-        position.inMilliseconds >= _dictationStopAtMs!) {
-      _dictationStopAtMs = null;
-      if (_dictationLooping) {
-        _playDictationLine(_dictationIndex);
-      } else {
-        _stopVideo();
+    if (_dictationActive && _dictationStopAtMs != null) {
+      if (_dictationAwaitingSeek) {
+        // Stale position while the restart seek is in flight — wait for it
+        // to land below the stop point instead of restarting endlessly.
+        if (position.inMilliseconds < _dictationStopAtMs!) {
+          _dictationAwaitingSeek = false;
+        }
+      } else if (position.inMilliseconds >= _dictationStopAtMs!) {
+        _dictationStopAtMs = null;
+        if (_dictationLooping) {
+          _dictationAwaitingSeek = true;
+          _playDictationLine(_dictationIndex);
+        } else {
+          _stopVideo();
+        }
       }
     }
     _syncTranscriptReader();
@@ -672,12 +680,11 @@ class _PadPortraitPlayerScreenState
   }
 
   void _stopVideo() {
-    if (!state.isPlaying) {
-      return;
+    if (state.isPlaying) {
+      setState(() {
+        state.isPlaying = false;
+      });
     }
-    setState(() {
-      state.isPlaying = false;
-    });
     unawaited(_videoPlayer?.pause());
   }
 
@@ -1110,6 +1117,7 @@ class _PadPortraitPlayerScreenState
                                         startIndex: _dictationIndex,
                                         onPlayLine: _playDictationLine,
                                         onReplayLine: _replayDictationLine,
+                                        onPauseLine: _pauseDictationAudio,
                                         onExit: _exitDictation,
                                         onTypingStarted:
                                             _handleDictationTypingStarted,
@@ -1809,6 +1817,7 @@ class _PadPortraitPlayerScreenState
       _dictationActive = false;
       _dictationStopAtMs = null;
       _dictationLooping = false;
+      _dictationAwaitingSeek = false;
     });
     if (state.isLooping) {
       _handleClearLoop();
@@ -1850,10 +1859,19 @@ class _PadPortraitPlayerScreenState
     _applyPlaybackMode();
   }
 
-  /// The sentence loops while the learner listens; the first keystroke
-  /// pauses it so typing happens in silence.
+  /// The sentence loops while the learner listens; typing pauses it so
+  /// dictation happens in silence (fires on every accepted letter).
   void _handleDictationTypingStarted() {
     _dictationLooping = false;
+    _stopVideo();
+  }
+
+  /// Manual pause from the dictation panel: stops audio and disarms any
+  /// pending loop restart.
+  void _pauseDictationAudio() {
+    _dictationLooping = false;
+    _dictationStopAtMs = null;
+    _dictationAwaitingSeek = false;
     _stopVideo();
   }
 
