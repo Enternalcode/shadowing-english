@@ -58,8 +58,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   final Map<int, int> _lineBest = <int, int>{};
   int _streak = 0;
   int _lastDelta = 0;
+  double _sfxVolume = 80;
   final Player _sfx = Player();
   final Player _keySfx = Player();
+  final Player _keyErr = Player();
 
   int _sessionAttempts = 0;
   int _sessionCorrect = 0;
@@ -75,11 +77,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     _order = List<int>.generate(widget.lines.length, (int i) => i);
     _pos = _order.indexOf(widget.startIndex.clamp(0, widget.lines.length - 1));
     if (_pos < 0) _pos = 0;
-    unawaited(_sfx.setVolume(60));
-    unawaited(_keySfx.setVolume(45));
+    unawaited(_applyVolume());
     unawaited(
       _keySfx.open(Media('asset:///assets/sfx/click.wav'), play: false),
     );
+    unawaited(_keyErr.open(Media('asset:///assets/sfx/err.wav'), play: false));
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPos(_pos));
     _refreshToday();
   }
@@ -94,6 +96,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
   @override
   void dispose() {
+    unawaited(_keyErr.dispose());
     unawaited(_keySfx.dispose());
     unawaited(_sfx.dispose());
     _controller.dispose();
@@ -211,8 +214,48 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     unawaited(ref.read(wordPronunciationServiceProvider).speak(word));
   }
 
-  void _keyClick() {
-    unawaited(_keySfx.seek(Duration.zero).then((_) => _keySfx.play()));
+  void _keySound(bool correct) {
+    final Player p = correct ? _keySfx : _keyErr;
+    unawaited(p.seek(Duration.zero).then((_) => p.play()));
+  }
+
+  Future<void> _applyVolume() async {
+    await _sfx.setVolume(_sfxVolume);
+    await _keySfx.setVolume(_sfxVolume);
+    await _keyErr.setVolume(_sfxVolume);
+  }
+
+  void _showVolumeDialog() {
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (BuildContext context) => StatefulBuilder(
+          builder: (BuildContext context, StateSetter setD) => AlertDialog(
+            title: const Text('音效音量'),
+            content: SizedBox(
+              width: 280,
+              child: Slider(
+                value: _sfxVolume,
+                max: 100,
+                divisions: 20,
+                label: '${_sfxVolume.round()}',
+                onChanged: (double v) {
+                  setD(() => _sfxVolume = v);
+                  setState(() {});
+                  unawaited(_applyVolume());
+                },
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('完成'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _retryWrongLines() {
@@ -290,6 +333,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                 icon: const Icon(Icons.skip_next_rounded),
               ),
               IconButton(
+                tooltip: '音效音量',
+                onPressed: _showVolumeDialog,
+                icon: const Icon(Icons.tune_rounded),
+              ),
+              IconButton(
                 tooltip: '退出听写',
                 onPressed: widget.onExit,
                 icon: const Icon(Icons.close_rounded),
@@ -337,8 +385,24 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             autocorrect: false,
             enableSuggestions: false,
             onChanged: (_) {
-              if (_checked) setState(() => _checked = false);
-              _keyClick();
+              final String typedL = _lettersOf(_controller.text);
+              final String expL = _lettersOf(_line.english);
+              if (_checked) {
+                setState(() => _checked = false);
+              } else {
+                setState(() {});
+              }
+              if (typedL.isNotEmpty) {
+                final int i = typedL.length - 1;
+                _keySound(
+                  i < expL.length &&
+                      typedL[i].toLowerCase() == expL[i].toLowerCase(),
+                );
+              }
+              if (typedL.length == expL.length &&
+                  typedL.toLowerCase() == expL.toLowerCase()) {
+                _check();
+              }
             },
             onSubmitted: (_) => _primaryAction(),
             decoration: const InputDecoration(
@@ -439,10 +503,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                     color: AppDesignTokens.textSecondary,
                   ),
                   const SizedBox(height: 10),
-                  _MaskedText(
+                  _SlotLine(
                     line: _line.english,
-                    active: true,
-                    showLetters: _hintLetters,
+                    typed: _controller.text,
+                    reveal: _showAnswer,
+                    showFirstLetters: _hintLetters,
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -601,6 +666,107 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
           ],
         ),
       ],
+    );
+  }
+}
+
+bool _isLetterRune(int r) =>
+    (r >= 0x61 && r <= 0x7A) ||
+    (r >= 0x41 && r <= 0x5A) ||
+    (r >= 0x30 && r <= 0x39);
+
+String _lettersOf(String s) =>
+    String.fromCharCodes(s.runes.where(_isLetterRune));
+
+/// qwerty-learner-style letter slots: typed letters land in the next slot
+/// and turn green/red against the expected letter, live; on reveal the
+/// remaining cells show the expected letters.
+class _SlotLine extends StatelessWidget {
+  const _SlotLine({
+    required this.line,
+    required this.typed,
+    this.reveal = false,
+    this.showFirstLetters = false,
+  });
+
+  final String line;
+  final String typed;
+  final bool reveal;
+  final bool showFirstLetters;
+
+  static const Color _ok = Color(0xFF1A7F37);
+  static const Color _wrong = Color(0xFFD13438);
+  static const Color _hint = Color(0xFF2563EB);
+  static const Color _empty = Color(0xFFCBD5E1);
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> words = dictationTokens(line);
+    final String typedLetters = _lettersOf(typed);
+    int g = 0;
+    final List<Widget> groups = <Widget>[];
+    for (final String word in words) {
+      final List<int> letters = word.runes.where(_isLetterRune).toList();
+      final List<Widget> cells = <Widget>[];
+      for (int i = 0; i < letters.length; i++) {
+        cells.add(
+          _cell(
+            g++,
+            String.fromCharCode(letters[i]),
+            typedLetters,
+            wordStart: i == 0,
+          ),
+        );
+      }
+      groups.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(mainAxisSize: MainAxisSize.min, children: cells),
+        ),
+      );
+    }
+    return Wrap(
+      alignment: WrapAlignment.center,
+      runSpacing: 8,
+      children: groups,
+    );
+  }
+
+  Widget _cell(
+    int idx,
+    String expected,
+    String typedLetters, {
+    required bool wordStart,
+  }) {
+    String text = '';
+    Color fg = AppDesignTokens.textSecondary;
+    Color border = _empty;
+    if (idx < typedLetters.length) {
+      final String t = typedLetters[idx];
+      final bool ok = t.toLowerCase() == expected.toLowerCase();
+      text = t;
+      fg = ok ? _ok : _wrong;
+      border = fg;
+    } else if (reveal) {
+      text = expected;
+      fg = AppDesignTokens.textPrimary;
+    } else if (showFirstLetters && wordStart) {
+      text = expected;
+      fg = _hint;
+      border = _hint;
+    }
+    return Container(
+      width: 15,
+      height: 24,
+      margin: const EdgeInsets.symmetric(horizontal: 0.5),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: border, width: 2)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg),
+      ),
     );
   }
 }
