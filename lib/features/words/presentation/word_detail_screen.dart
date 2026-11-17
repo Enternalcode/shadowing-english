@@ -378,6 +378,7 @@ class _WordHeader extends StatelessWidget {
             ],
           ),
         ),
+        _WordAtlasImage(word: entry.word),
         IconButton(
           tooltip: '播放单词发音',
           onPressed: speaking ? null : onSpeak,
@@ -397,6 +398,64 @@ class _WordHeader extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _WordAtlasImage extends StatefulWidget {
+  const _WordAtlasImage({required this.word});
+
+  final String word;
+
+  static const String _baseUrl =
+      'https://raw.githubusercontent.com/designfuchen/word-atlas/'
+      'main/public/atlas/img/';
+
+  @override
+  State<_WordAtlasImage> createState() => _WordAtlasImageState();
+}
+
+class _WordAtlasImageState extends State<_WordAtlasImage> {
+  bool _available = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final String slug = widget.word.trim().toLowerCase();
+    if (!_available || slug.isEmpty || slug.contains(' ')) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(left: 12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Image.network(
+          '${_WordAtlasImage._baseUrl}${Uri.encodeComponent(slug)}.webp',
+          width: 128,
+          height: 92,
+          fit: BoxFit.cover,
+          loadingBuilder:
+              (
+                BuildContext context,
+                Widget child,
+                ImageChunkEvent? progress,
+              ) => progress == null
+              ? child
+              : Container(
+                  width: 128,
+                  height: 92,
+                  color: const Color(0xFFF2FBEA),
+                ),
+          errorBuilder:
+              (BuildContext context, Object error, StackTrace? stackTrace) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() => _available = false);
+                  }
+                });
+                return const SizedBox(width: 128, height: 92);
+              },
+        ),
+      ),
+    );
+  }
 }
 
 class _DefinitionCard extends StatelessWidget {

@@ -60,11 +60,12 @@ const List<String> translationProviderOptions = <String>[
   'OpenRouter',
   'SiliconFlow',
   'DeepSeek',
+  'StepFun',
   'Google 翻译',
   '百度翻译',
   '阿里云翻译',
 ];
-const List<String> asrProviderOptions = <String>['阿里云百炼', '腾讯云'];
+const List<String> asrProviderOptions = <String>['阿里云百炼', '腾讯云', 'StepFun'];
 
 const String _learningSettingsStorageKey = 'learning_settings_v1';
 
@@ -102,6 +103,11 @@ const Map<String, TranslationProviderPreset> translationProviderPresets =
         baseUrl: 'https://api.deepseek.com',
         model: 'deepseek-v4-flash',
       ),
+      'StepFun': TranslationProviderPreset(
+        name: 'StepFun',
+        baseUrl: 'https://api.stepfun.com/step_plan/v1',
+        model: 'step-5-preview',
+      ),
       'Google 翻译': TranslationProviderPreset(
         name: 'Google 翻译',
         baseUrl: 'https://translation.googleapis.com',
@@ -130,6 +136,11 @@ const Map<String, TranslationProviderPreset> asrProviderPresets =
         name: '腾讯云',
         baseUrl: 'https://asr.tencentcloudapi.com',
         model: '16k_en',
+      ),
+      'StepFun': TranslationProviderPreset(
+        name: 'StepFun',
+        baseUrl: 'https://api.stepfun.com/step_plan/v1',
+        model: 'stepaudio-3-asr-max',
       ),
     };
 
@@ -750,6 +761,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
     return provider == 'OpenAI' ||
         provider == 'OpenRouter' ||
         provider == 'SiliconFlow' ||
-        provider == 'DeepSeek';
+        provider == 'DeepSeek' ||
+        provider == 'StepFun';
   }
 }

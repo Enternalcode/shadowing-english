@@ -527,8 +527,8 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ] else
                         SettingsInputRow(
-                          title: '百炼 API Key',
-                          description: '在阿里云百炼创建 API Key；音频仅临时上传用于转写。',
+                          title: isAlibabaAsr ? '百炼 API Key' : 'ASR API Key',
+                          description: '在对应平台创建 API Key；音频仅临时上传用于转写。',
                           value: settings.asrApiKey,
                           hintText: 'YOUR_ASR_API_KEY_HERE',
                           obscureText: true,
@@ -742,7 +742,8 @@ class SettingsScreen extends ConsumerWidget {
     return provider == 'OpenAI' ||
         provider == 'OpenRouter' ||
         provider == 'SiliconFlow' ||
-        provider == 'DeepSeek';
+        provider == 'DeepSeek' ||
+        provider == 'StepFun';
   }
 }
 
