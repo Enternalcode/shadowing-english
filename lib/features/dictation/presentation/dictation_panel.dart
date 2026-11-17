@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit/media_kit.dart';
 
+import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../data/dictation_stats_store.dart';
 import '../domain/dictation_diff.dart';
@@ -41,7 +43,8 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  int _index = 0;
+  late List<int> _order;
+  int _pos = 0;
   bool _checked = false;
   bool _showAnswer = false;
   bool _showSubtitles = false;
@@ -50,35 +53,45 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   DictationScore? _score;
   DictationDayStats? _today;
   final Set<int> _revealed = <int>{};
+  final Set<int> _seen = <int>{};
+  final Set<int> _wrongLines = <int>{};
+  final Map<int, int> _lineBest = <int, int>{};
+  int _streak = 0;
+  int _lastDelta = 0;
   Timer? _autoAdvance;
+  final Player _sfx = Player();
 
   int _sessionAttempts = 0;
   int _sessionCorrect = 0;
   int _sessionTotal = 0;
   final Map<String, int> _sessionErrors = <String, int>{};
 
+  int get _index => _order[_pos];
   DictationLine get _line => widget.lines[_index];
 
   @override
   void initState() {
     super.initState();
-    _index = widget.startIndex.clamp(0, widget.lines.length - 1);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openLine(_index));
+    _order = List<int>.generate(widget.lines.length, (int i) => i);
+    _pos = _order.indexOf(widget.startIndex.clamp(0, widget.lines.length - 1));
+    if (_pos < 0) _pos = 0;
+    unawaited(_sfx.setVolume(60));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openPos(_pos));
     _refreshToday();
   }
 
   @override
   void didUpdateWidget(covariant DictationPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.startIndex != oldWidget.startIndex &&
-        widget.startIndex != _index) {
-      _openLine(widget.startIndex.clamp(0, widget.lines.length - 1));
+    if (widget.startIndex != oldWidget.startIndex) {
+      _jumpToLine(widget.startIndex.clamp(0, widget.lines.length - 1));
     }
   }
 
   @override
   void dispose() {
     _autoAdvance?.cancel();
+    unawaited(_sfx.dispose());
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -91,18 +104,30 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     if (mounted) setState(() => _today = stats);
   }
 
-  void _openLine(int index) {
+  void _openPos(int pos) {
     _autoAdvance?.cancel();
     setState(() {
-      _index = index;
+      _pos = pos;
       _checked = false;
       _showAnswer = false;
       _hintLetters = false;
       _score = null;
+      _lastDelta = 0;
       _controller.clear();
     });
-    widget.onPlayLine(index);
+    widget.onPlayLine(_order[pos]);
     _focusNode.requestFocus();
+  }
+
+  /// Peek-list tap: jump within the active order, falling back to the full
+  /// list when the tapped line isn't in a wrong-lines subset.
+  void _jumpToLine(int lineIndex) {
+    int pos = _order.indexOf(lineIndex);
+    if (pos < 0) {
+      _order = List<int>.generate(widget.lines.length, (int i) => i);
+      pos = lineIndex;
+    }
+    _openPos(pos);
   }
 
   void _primaryAction() {
@@ -119,11 +144,23 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       _line.english,
       _controller.text,
     );
+    final int pct = score.percent;
+    final int? prevBest = _lineBest[_index];
     setState(() {
       _checked = true;
       _showAnswer = true;
       _score = score;
       _revealed.add(_index);
+      _lastDelta = prevBest != null && pct > prevBest ? pct - prevBest : 0;
+      if (prevBest == null || pct > prevBest) _lineBest[_index] = pct;
+      if (pct == 100) {
+        _wrongLines.remove(_index);
+      } else {
+        _wrongLines.add(_index);
+      }
+      if (_seen.add(_index)) {
+        _streak = pct == 100 ? _streak + 1 : 0;
+      }
       _sessionAttempts++;
       _sessionCorrect += score.correct;
       _sessionTotal += score.total;
@@ -134,6 +171,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         _sessionErrors[w] = (_sessionErrors[w] ?? 0) + 1;
       }
     });
+    unawaited(_playSfx(pct == 100 ? 'ding.wav' : 'blip.wav'));
     unawaited(
       ref
           .read(dictationStatsStoreProvider)
@@ -156,11 +194,45 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   }
 
   void _advance() {
-    if (_index + 1 < widget.lines.length) {
-      _openLine(_index + 1);
+    if (_pos + 1 < _order.length) {
+      _openPos(_pos + 1);
     } else {
       setState(() => _finished = true);
     }
+  }
+
+  Future<void> _playSfx(String name) async {
+    try {
+      await _sfx.open(Media('asset:///assets/sfx/$name'));
+    } catch (_) {}
+  }
+
+  void _speakWord(String word) {
+    unawaited(ref.read(wordPronunciationServiceProvider).speak(word));
+  }
+
+  void _retryWrongLines() {
+    setState(() {
+      _order = _wrongLines.toList()..sort();
+      _wrongLines.clear();
+      _revealed.clear();
+      _seen.clear();
+      _streak = 0;
+      _finished = false;
+    });
+    _openPos(0);
+  }
+
+  void _restartAll() {
+    setState(() {
+      _order = List<int>.generate(widget.lines.length, (int i) => i);
+      _wrongLines.clear();
+      _revealed.clear();
+      _seen.clear();
+      _streak = 0;
+      _finished = false;
+    });
+    _openPos(0);
   }
 
   @override
@@ -174,127 +246,138 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         const SingleActivator(LogicalKeyboardKey.tab): () =>
             widget.onPlayLine(_index),
         const SingleActivator(LogicalKeyboardKey.tab, shift: true): () {
-          if (_index > 0) _openLine(_index - 1);
+          if (_pos > 0) _openPos(_pos - 1);
         },
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-        Row(
-          children: <Widget>[
-            const Text(
-              '听写练习',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${_index + 1} / ${widget.lines.length}',
-              style: const TextStyle(color: AppDesignTokens.textSecondary),
-            ),
-            const Spacer(),
-            _SubtitleToggle(
-              visible: _showSubtitles,
-              onChanged: (bool v) => setState(() => _showSubtitles = v),
-            ),
-            IconButton(
-              tooltip: '上一句',
-              onPressed: _index > 0 ? () => _openLine(_index - 1) : null,
-              icon: const Icon(Icons.skip_previous_rounded),
-            ),
-            IconButton(
-              tooltip: '重播本句',
-              onPressed: () => widget.onPlayLine(_index),
-              icon: const Icon(Icons.volume_up_rounded),
-            ),
-            IconButton(
-              tooltip: '下一句',
-              onPressed: _index + 1 < widget.lines.length
-                  ? () => _openLine(_index + 1)
-                  : null,
-              icon: const Icon(Icons.skip_next_rounded),
-            ),
-            IconButton(
-              tooltip: '退出听写',
-              onPressed: widget.onExit,
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ],
-        ),
-        Text(
-          _checked
-              ? '继续输入可重新校验，Enter 下一句'
-              : _showSubtitles
-              ? '听音频输入当前句（当前句已遮蔽）；Enter 校验 · Tab 重播'
-              : '盲听输入，可以不打空格；Enter 校验 · Tab 重播 · Shift+Tab 上一句',
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppDesignTokens.textSecondary,
+          Row(
+            children: <Widget>[
+              const Text(
+                '听写练习',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${_pos + 1} / ${_order.length}',
+                style: const TextStyle(color: AppDesignTokens.textSecondary),
+              ),
+              const Spacer(),
+              _SubtitleToggle(
+                visible: _showSubtitles,
+                onChanged: (bool v) => setState(() => _showSubtitles = v),
+              ),
+              IconButton(
+                tooltip: '上一句',
+                onPressed: _pos > 0 ? () => _openPos(_pos - 1) : null,
+                icon: const Icon(Icons.skip_previous_rounded),
+              ),
+              IconButton(
+                tooltip: '重播本句',
+                onPressed: () => widget.onPlayLine(_index),
+                icon: const Icon(Icons.volume_up_rounded),
+              ),
+              IconButton(
+                tooltip: '下一句',
+                onPressed: _pos + 1 < _order.length
+                    ? () => _openPos(_pos + 1)
+                    : null,
+                icon: const Icon(Icons.skip_next_rounded),
+              ),
+              IconButton(
+                tooltip: '退出听写',
+                onPressed: widget.onExit,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: _showSubtitles ? _buildPeekList() : _buildBlindArea(),
-        ),
-        const SizedBox(height: 8),
-        if (_score != null && _checked) ...<Widget>[
-          _ScoreHeader(score: _score!),
-          const SizedBox(height: 6),
-          _DiffRow(label: '正确', words: _score!.answerRow, isAnswer: true),
-          const SizedBox(height: 2),
-          _DiffRow(label: '你的', words: _score!.userRow, isAnswer: false),
+          Text(
+            _checked
+                ? '继续输入可重新校验，Enter 下一句'
+                : _showSubtitles
+                ? '听音频输入当前句（当前句已遮蔽）；Enter 校验 · Tab 重播'
+                : '盲听输入，可以不打空格；Enter 校验 · Tab 重播 · Shift+Tab 上一句',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppDesignTokens.textSecondary,
+            ),
+          ),
           const SizedBox(height: 8),
-        ],
-        TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          autofocus: true,
-          autocorrect: false,
-          enableSuggestions: false,
-          onChanged: (_) {
-            if (_checked) setState(() => _checked = false);
-          },
-          onSubmitted: (_) => _primaryAction(),
-          decoration: const InputDecoration(
-            hintText: '输入听到的内容…',
-            border: OutlineInputBorder(),
-            isDense: true,
+          Expanded(
+            child: _showSubtitles ? _buildPeekList() : _buildBlindArea(),
           ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            TextButton.icon(
-              onPressed: _showAnswer
-                  ? null
-                  : () => setState(() => _hintLetters = !_hintLetters),
-              icon: const Icon(Icons.abc_rounded, size: 18),
-              label: Text(_hintLetters ? '收回提示' : '提示首字母'),
+          const SizedBox(height: 8),
+          if (_score != null && _checked) ...<Widget>[
+            _ScoreHeader(score: _score!, delta: _lastDelta, streak: _streak),
+            const SizedBox(height: 6),
+            _DiffRow(
+              label: '正确',
+              words: _score!.answerRow,
+              isAnswer: true,
+              onSpeakWord: _speakWord,
             ),
-            TextButton.icon(
-              onPressed: () {
-                setState(() {
-                  _showAnswer = !_showAnswer;
-                  if (_showAnswer) _revealed.add(_index);
-                });
-              },
-              icon: const Icon(Icons.visibility_outlined, size: 18),
-              label: Text(_showAnswer ? '隐藏答案' : '显示答案'),
+            const SizedBox(height: 2),
+            _DiffRow(
+              label: '你的',
+              words: _score!.userRow,
+              isAnswer: false,
+              onSpeakWord: _speakWord,
             ),
-            const Spacer(),
-            FilledButton(
-              onPressed: _primaryAction,
-              child: Text(_checked ? '下一句 (Enter)' : '校验 (Enter)'),
-            ),
+            const SizedBox(height: 8),
           ],
-        ),
-        const SizedBox(height: 4),
-        _StatsFooter(
-          sessionAttempts: _sessionAttempts,
-          sessionPercent: _sessionTotal == 0
-              ? 0
-              : (_sessionCorrect * 100 / _sessionTotal).round(),
-          today: _today,
-        ),
+          TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            autofocus: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            onChanged: (_) {
+              if (_checked) setState(() => _checked = false);
+            },
+            onSubmitted: (_) => _primaryAction(),
+            decoration: const InputDecoration(
+              hintText: '输入听到的内容…',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              TextButton.icon(
+                onPressed: _showAnswer
+                    ? null
+                    : () => setState(() => _hintLetters = !_hintLetters),
+                icon: const Icon(Icons.abc_rounded, size: 18),
+                label: Text(_hintLetters ? '收回提示' : '提示首字母'),
+              ),
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _showAnswer = !_showAnswer;
+                    if (_showAnswer) _revealed.add(_index);
+                  });
+                },
+                icon: const Icon(Icons.visibility_outlined, size: 18),
+                label: Text(_showAnswer ? '隐藏答案' : '显示答案'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _primaryAction,
+                child: Text(_checked ? '下一句 (Enter)' : '校验 (Enter)'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _StatsFooter(
+            sessionAttempts: _sessionAttempts,
+            sessionPercent: _sessionTotal == 0
+                ? 0
+                : (_sessionCorrect * 100 / _sessionTotal).round(),
+            streak: _streak,
+            today: _today,
+          ),
         ],
       ),
     );
@@ -326,9 +409,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                 const SizedBox(height: 6),
                 Text(
                   _line.chinese,
-                  style: const TextStyle(
-                    color: AppDesignTokens.textSecondary,
-                  ),
+                  style: const TextStyle(color: AppDesignTokens.textSecondary),
                 ),
               ],
             ],
@@ -375,7 +456,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         final bool active = i == _index;
         final bool masked = active && !_revealed.contains(i);
         return InkWell(
-          onTap: () => _openLine(i),
+          onTap: () => _jumpToLine(i),
           borderRadius: BorderRadius.circular(10),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -475,16 +556,13 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: <Widget>[
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _finished = false;
-                  _revealed.clear();
-                });
-                _openLine(0);
-              },
-              child: const Text('再来一遍'),
-            ),
+            if (_wrongLines.isNotEmpty)
+              TextButton.icon(
+                onPressed: _retryWrongLines,
+                icon: const Icon(Icons.replay_rounded, size: 16),
+                label: Text('只练错句 (${_wrongLines.length})'),
+              ),
+            TextButton(onPressed: _restartAll, child: const Text('再来一遍')),
             const SizedBox(width: 8),
             FilledButton(onPressed: widget.onExit, child: const Text('完成')),
           ],
@@ -517,9 +595,7 @@ class _SubtitleToggle extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Icon(
-                visible
-                    ? Icons.subtitles_rounded
-                    : Icons.subtitles_off_rounded,
+                visible ? Icons.subtitles_rounded : Icons.subtitles_off_rounded,
                 size: 16,
                 color: visible
                     ? const Color(0xFF2563EB)
@@ -588,9 +664,7 @@ class _MaskedText extends StatelessWidget {
             width: 16,
             height: 7,
             decoration: BoxDecoration(
-              color: active
-                  ? const Color(0xFF93C5FD)
-                  : const Color(0xFFCBD5E1),
+              color: active ? const Color(0xFF93C5FD) : const Color(0xFFCBD5E1),
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -600,9 +674,11 @@ class _MaskedText extends StatelessWidget {
 }
 
 class _ScoreHeader extends StatelessWidget {
-  const _ScoreHeader({required this.score});
+  const _ScoreHeader({required this.score, this.delta = 0, this.streak = 0});
 
   final DictationScore score;
+  final int delta;
+  final int streak;
 
   @override
   Widget build(BuildContext context) {
@@ -630,6 +706,28 @@ class _ScoreHeader extends StatelessWidget {
           '听对 ${score.correct}/${score.total} 词',
           style: const TextStyle(color: AppDesignTokens.textSecondary),
         ),
+        if (delta > 0) ...<Widget>[
+          const SizedBox(width: 8),
+          Text(
+            '+$delta 进步',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF1A7F37),
+            ),
+          ),
+        ],
+        if (streak >= 2) ...<Widget>[
+          const SizedBox(width: 8),
+          Text(
+            '连对 $streak',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFEA580C),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -640,11 +738,13 @@ class _DiffRow extends StatelessWidget {
     required this.label,
     required this.words,
     required this.isAnswer,
+    this.onSpeakWord,
   });
 
   final String label;
   final List<MarkedWord> words;
   final bool isAnswer;
+  final void Function(String word)? onSpeakWord;
 
   static const Color _ok = Color(0xFF1A7F37);
   static const Color _wrong = Color(0xFFD13438);
@@ -672,26 +772,27 @@ class _DiffRow extends StatelessWidget {
           child: Wrap(
             spacing: 4,
             runSpacing: 4,
-            children: <Widget>[
-              for (final MarkedWord w in words) _wordChip(w),
-            ],
+            children: <Widget>[for (final MarkedWord w in words) _chip(w)],
           ),
         ),
       ],
     );
   }
 
-  Widget _wordChip(MarkedWord w) {
-    const TextStyle base = TextStyle(
-      fontSize: 15,
-      fontWeight: FontWeight.w700,
+  Widget _chip(MarkedWord w) {
+    final Widget chip = _wordChip(w);
+    if (w.mark == WordMark.ok || onSpeakWord == null) return chip;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: () => onSpeakWord!(w.text), child: chip),
     );
+  }
+
+  Widget _wordChip(MarkedWord w) {
+    const TextStyle base = TextStyle(fontSize: 15, fontWeight: FontWeight.w700);
     switch (w.mark) {
       case WordMark.ok:
-        return Text(
-          w.text,
-          style: base.copyWith(color: isAnswer ? null : _ok),
-        );
+        return Text(w.text, style: base.copyWith(color: isAnswer ? null : _ok));
       case WordMark.wrong:
         return Text(w.text, style: base.copyWith(color: _wrong));
       case WordMark.near:
@@ -730,11 +831,13 @@ class _StatsFooter extends StatelessWidget {
   const _StatsFooter({
     required this.sessionAttempts,
     required this.sessionPercent,
+    required this.streak,
     required this.today,
   });
 
   final int sessionAttempts;
   final int sessionPercent;
+  final int streak;
   final DictationDayStats? today;
 
   @override
@@ -742,6 +845,7 @@ class _StatsFooter extends StatelessWidget {
     final DictationDayStats? t = today;
     return Text(
       '本次 $sessionAttempts 句 · 平均 $sessionPercent%'
+      '${streak >= 2 ? ' ｜ 连对 $streak' : ''}'
       '${t == null ? '' : ' ｜ 今日 ${t.attempts} 句 · ${t.percent}%'}',
       style: const TextStyle(
         fontSize: 12,

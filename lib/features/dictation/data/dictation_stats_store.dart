@@ -52,7 +52,9 @@ class DictationStatsStore {
 
   Future<DictationDayStats> today() async {
     final Box<String> box = await _openBox();
-    final Map<String, int> day = _decodeMap(box.get('day:${_dayKey(DateTime.now())}'));
+    final Map<String, int> day = _decodeMap(
+      box.get('day:${_dayKey(DateTime.now())}'),
+    );
     return DictationDayStats(
       attempts: day['attempts'] ?? 0,
       correct: day['correct'] ?? 0,

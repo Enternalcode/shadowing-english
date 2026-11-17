@@ -8,7 +8,10 @@ void main() {
     final DictationScore score = scoreDictation(answer, answer);
     expect(score.percent, 100);
     expect(score.correct, 6);
-    expect(score.userRow.every((MarkedWord w) => w.mark == WordMark.ok), isTrue);
+    expect(
+      score.userRow.every((MarkedWord w) => w.mark == WordMark.ok),
+      isTrue,
+    );
   });
 
   test('substituted word is marked wrong on both rows', () {
@@ -105,6 +108,28 @@ void main() {
     final DictationScore score = scoreDictation(answer, '   ');
     expect(score.percent, 0);
     expect(score.missedWords.length, 6);
+  });
+
+  test('expanded form equals contraction (I am == I\'m)', () {
+    final DictationScore score = scoreDictation(
+      "I'm with aitransito.",
+      'I am with the aitransito',
+    );
+    // 'i am' matches 'i\'m' after expansion; 'the' is a real extra word.
+    expect(score.correct, 4);
+    expect(score.total, 4);
+    expect(
+      score.userRow.where((MarkedWord w) => w.mark == WordMark.ok).length,
+      4,
+    );
+  });
+
+  test('contraction typed for expanded answer also scores equal', () {
+    final DictationScore score = scoreDictation(
+      'I do not know.',
+      "i don't know",
+    );
+    expect(score.percent, 100);
   });
 
   test('punctuation and case are ignored', () {

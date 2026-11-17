@@ -50,6 +50,90 @@ List<String> dictationTokens(String input) => _wordPattern
     .map((RegExpMatch m) => m.group(0)!)
     .toList(growable: false);
 
+/// Contractions expand to their spoken full forms before alignment, so
+/// "I am" scores equal to "I'm" — a false negative otherwise. 'd is
+/// treated as "would" (the more common reading); 's as "is".
+const Map<String, List<String>> _contractions = <String, List<String>>{
+  "i'm": <String>['i', 'am'],
+  "you're": <String>['you', 'are'],
+  "we're": <String>['we', 'are'],
+  "they're": <String>['they', 'are'],
+  "he's": <String>['he', 'is'],
+  "she's": <String>['she', 'is'],
+  "it's": <String>['it', 'is'],
+  "that's": <String>['that', 'is'],
+  "there's": <String>['there', 'is'],
+  "here's": <String>['here', 'is'],
+  "what's": <String>['what', 'is'],
+  "who's": <String>['who', 'is'],
+  "where's": <String>['where', 'is'],
+  "how's": <String>['how', 'is'],
+  "let's": <String>['let', 'us'],
+  "i'll": <String>['i', 'will'],
+  "you'll": <String>['you', 'will'],
+  "he'll": <String>['he', 'will'],
+  "she'll": <String>['she', 'will'],
+  "it'll": <String>['it', 'will'],
+  "we'll": <String>['we', 'will'],
+  "they'll": <String>['they', 'will'],
+  "that'll": <String>['that', 'will'],
+  "there'll": <String>['there', 'will'],
+  "i've": <String>['i', 'have'],
+  "you've": <String>['you', 'have'],
+  "we've": <String>['we', 'have'],
+  "they've": <String>['they', 'have'],
+  "could've": <String>['could', 'have'],
+  "should've": <String>['should', 'have'],
+  "would've": <String>['would', 'have'],
+  "might've": <String>['might', 'have'],
+  "must've": <String>['must', 'have'],
+  "i'd": <String>['i', 'would'],
+  "you'd": <String>['you', 'would'],
+  "he'd": <String>['he', 'would'],
+  "she'd": <String>['she', 'would'],
+  "it'd": <String>['it', 'would'],
+  "we'd": <String>['we', 'would'],
+  "they'd": <String>['they', 'would'],
+  "that'd": <String>['that', 'would'],
+  "there'd": <String>['there', 'would'],
+  "who'd": <String>['who', 'would'],
+  "don't": <String>['do', 'not'],
+  "doesn't": <String>['does', 'not'],
+  "didn't": <String>['did', 'not'],
+  "won't": <String>['will', 'not'],
+  "can't": <String>['can', 'not'],
+  'cannot': <String>['can', 'not'],
+  "couldn't": <String>['could', 'not'],
+  "shouldn't": <String>['should', 'not'],
+  "wouldn't": <String>['would', 'not'],
+  "mustn't": <String>['must', 'not'],
+  "isn't": <String>['is', 'not'],
+  "aren't": <String>['are', 'not'],
+  "wasn't": <String>['was', 'not'],
+  "weren't": <String>['were', 'not'],
+  "hasn't": <String>['has', 'not'],
+  "haven't": <String>['have', 'not'],
+  "hadn't": <String>['had', 'not'],
+  'gonna': <String>['going', 'to'],
+  'wanna': <String>['want', 'to'],
+  'gotta': <String>['got', 'to'],
+  "y'all": <String>['you', 'all'],
+};
+
+/// Splits a display token into its comparison words (expansions when it's a
+/// contraction); [disp] receives the words to show — expanded for
+/// contractions, original casing otherwise.
+void _expandInto(String token, List<String> lower, List<String> disp) {
+  final List<String>? exp = _contractions[token.toLowerCase()];
+  if (exp == null) {
+    lower.add(token.toLowerCase());
+    disp.add(token);
+  } else {
+    lower.addAll(exp);
+    disp.addAll(exp);
+  }
+}
+
 /// Levenshtein alignment over word arrays, backtracked into an op sequence
 /// so a missing word doesn't shift every later word into "wrong".
 List<DictationOp> wordDiff(List<String> target, List<String> user) {
@@ -70,9 +154,11 @@ List<DictationOp> wordDiff(List<String> target, List<String> user) {
       dp[i][j] = target[i - 1] == user[j - 1]
           ? dp[i - 1][j - 1]
           : 1 +
-                <int>[dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]].reduce(
-                  (int a, int b) => a < b ? a : b,
-                );
+                <int>[
+                  dp[i - 1][j - 1],
+                  dp[i - 1][j],
+                  dp[i][j - 1],
+                ].reduce((int a, int b) => a < b ? a : b);
     }
   }
   final List<DictationOp> ops = <DictationOp>[];
@@ -111,9 +197,11 @@ int _levenshtein(String a, String b) {
       cur[j] = a.codeUnitAt(i - 1) == b.codeUnitAt(j - 1)
           ? prev[j - 1]
           : 1 +
-                <int>[prev[j - 1], prev[j], cur[j - 1]].reduce(
-                  (int x, int y) => x < y ? x : y,
-                );
+                <int>[
+                  prev[j - 1],
+                  prev[j],
+                  cur[j - 1],
+                ].reduce((int x, int y) => x < y ? x : y);
     }
     prev = cur;
   }
@@ -129,10 +217,7 @@ bool _isNearMiss(String user, String answer) =>
 /// answer — a local replacement for english-trainer's `/api/segment`.
 /// Returns one (possibly empty) segment per answer word, in order.
 List<String> segmentToAnswer(String input, List<String> answerLower) {
-  final String cleaned = input.toLowerCase().replaceAll(
-    RegExp("[^a-z']"),
-    '',
-  );
+  final String cleaned = input.toLowerCase().replaceAll(RegExp("[^a-z']"), '');
   final int k = answerLower.length;
   final int n = cleaned.length;
   if (k == 0) return const <String>[];
@@ -151,7 +236,8 @@ List<String> segmentToAnswer(String input, List<String> answerLower) {
     for (int i = 0; i <= n; i++) {
       if (dp[i][j - 1] == inf) continue;
       for (int e = i; e <= n; e++) {
-        final int cand = dp[i][j - 1] + _levenshtein(cleaned.substring(i, e), word);
+        final int cand =
+            dp[i][j - 1] + _levenshtein(cleaned.substring(i, e), word);
         if (cand < dp[e][j]) {
           dp[e][j] = cand;
           parent[e][j] = i;
@@ -177,9 +263,11 @@ List<String> segmentToAnswer(String input, List<String> answerLower) {
 /// answer-aware char alignment), then mark every word.
 DictationScore scoreDictation(String answer, String input) {
   final List<String> ansTok = dictationTokens(answer);
-  final List<String> ansLow = ansTok
-      .map((String w) => w.toLowerCase())
-      .toList(growable: false);
+  final List<String> ansLow = <String>[];
+  final List<String> ansDisp = <String>[];
+  for (final String w in ansTok) {
+    _expandInto(w, ansLow, ansDisp);
+  }
   final List<MarkedWord> answerRow = <MarkedWord>[];
   final List<MarkedWord> userRow = <MarkedWord>[];
   final List<String> wrongWords = <String>[];
@@ -187,14 +275,14 @@ DictationScore scoreDictation(String answer, String input) {
   int correct = 0;
 
   final String trimmed = input.trim();
-  if (trimmed.isEmpty || ansTok.isEmpty) {
-    for (final String w in ansTok) {
-      answerRow.add(MarkedWord(w, WordMark.miss));
-      missedWords.add(w.toLowerCase());
+  if (trimmed.isEmpty || ansLow.isEmpty) {
+    for (int i = 0; i < ansDisp.length; i++) {
+      answerRow.add(MarkedWord(ansDisp[i], WordMark.miss));
+      missedWords.add(ansLow[i]);
     }
     return DictationScore(
       correct: 0,
-      total: ansTok.length,
+      total: ansLow.length,
       answerRow: answerRow,
       userRow: userRow,
       wrongWords: wrongWords,
@@ -205,19 +293,19 @@ DictationScore scoreDictation(String answer, String input) {
   final bool hasSpaces = RegExp(r'\s').hasMatch(trimmed);
   if (!hasSpaces && dictationTokens(trimmed).isNotEmpty) {
     final List<String> segs = segmentToAnswer(trimmed, ansLow);
-    for (int idx = 0; idx < ansTok.length; idx++) {
+    for (int idx = 0; idx < ansLow.length; idx++) {
       final String seg = idx < segs.length ? segs[idx] : '';
       if (seg.isEmpty) {
-        answerRow.add(MarkedWord(ansTok[idx], WordMark.miss));
+        answerRow.add(MarkedWord(ansDisp[idx], WordMark.miss));
         missedWords.add(ansLow[idx]);
       } else if (seg == ansLow[idx]) {
         correct++;
-        answerRow.add(MarkedWord(ansTok[idx], WordMark.ok));
+        answerRow.add(MarkedWord(ansDisp[idx], WordMark.ok));
         userRow.add(MarkedWord(seg, WordMark.ok));
       } else {
         final bool near = _isNearMiss(seg, ansLow[idx]);
         answerRow.add(
-          MarkedWord(ansTok[idx], near ? WordMark.near : WordMark.wrong),
+          MarkedWord(ansDisp[idx], near ? WordMark.near : WordMark.wrong),
         );
         userRow.add(MarkedWord(seg, near ? WordMark.near : WordMark.wrong));
         wrongWords.add(ansLow[idx]);
@@ -225,36 +313,38 @@ DictationScore scoreDictation(String answer, String input) {
     }
   } else {
     final List<String> uTok = dictationTokens(trimmed);
-    final List<String> uLow = uTok
-        .map((String w) => w.toLowerCase())
-        .toList(growable: false);
+    final List<String> uLow = <String>[];
+    final List<String> uDisp = <String>[];
+    for (final String w in uTok) {
+      _expandInto(w, uLow, uDisp);
+    }
     for (final DictationOp op in wordDiff(ansLow, uLow)) {
       switch (op.type) {
         case DictationOpType.equal:
           correct++;
-          answerRow.add(MarkedWord(ansTok[op.ti], WordMark.ok));
-          userRow.add(MarkedWord(uTok[op.uj], WordMark.ok));
+          answerRow.add(MarkedWord(ansDisp[op.ti], WordMark.ok));
+          userRow.add(MarkedWord(uDisp[op.uj], WordMark.ok));
         case DictationOpType.substitute:
           final bool near = _isNearMiss(uLow[op.uj], ansLow[op.ti]);
           answerRow.add(
-            MarkedWord(ansTok[op.ti], near ? WordMark.near : WordMark.wrong),
+            MarkedWord(ansDisp[op.ti], near ? WordMark.near : WordMark.wrong),
           );
           userRow.add(
-            MarkedWord(uTok[op.uj], near ? WordMark.near : WordMark.wrong),
+            MarkedWord(uDisp[op.uj], near ? WordMark.near : WordMark.wrong),
           );
           wrongWords.add(ansLow[op.ti]);
         case DictationOpType.delete:
-          answerRow.add(MarkedWord(ansTok[op.ti], WordMark.miss));
+          answerRow.add(MarkedWord(ansDisp[op.ti], WordMark.miss));
           missedWords.add(ansLow[op.ti]);
         case DictationOpType.insert:
-          userRow.add(MarkedWord(uTok[op.uj], WordMark.extra));
+          userRow.add(MarkedWord(uDisp[op.uj], WordMark.extra));
       }
     }
   }
 
   return DictationScore(
     correct: correct,
-    total: ansTok.length,
+    total: ansLow.length,
     answerRow: answerRow,
     userRow: userRow,
     wrongWords: wrongWords,
