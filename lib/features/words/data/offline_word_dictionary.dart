@@ -41,7 +41,10 @@ class OfflineWordDictionary {
       return MapEntry<String, OfflineWordDefinition>(
         word,
         OfflineWordDefinition(
-          translation: fields[0] as String,
+          // ECDICT stores line breaks as a literal backslash-n pair.
+          translation: (fields[0] as String)
+              .replaceAll(r'\r\n', '\n')
+              .replaceAll(r'\n', '\n'),
           phonetic: fields[1] as String,
           partOfSpeech: fields[2] as String,
         ),
