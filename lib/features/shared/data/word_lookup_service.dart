@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../settings/presentation/settings_provider.dart';
 import '../../words/data/offline_word_dictionary.dart';
+import '../../words/data/word_atlas_dictionary.dart';
 import '../domain/word_lookup_entry.dart';
 
 typedef WordLookupRemoteLookup =
@@ -27,6 +28,7 @@ typedef WordLookupHttpRequest =
 final Provider<WordLookupService> wordLookupServiceProvider =
     Provider<WordLookupService>(
       (Ref ref) => WordLookupService(
+        wordAtlas: ref.watch(wordAtlasDictionaryProvider),
         offlineDictionary: ref.watch(offlineWordDictionaryProvider),
       ),
     );
@@ -35,11 +37,13 @@ class WordLookupService {
   const WordLookupService({
     this.remoteLookupOverride,
     this.httpRequestOverride,
+    this.wordAtlas,
     this.offlineDictionary,
   });
 
   final WordLookupRemoteLookup? remoteLookupOverride;
   final WordLookupHttpRequest? httpRequestOverride;
+  final WordAtlasDictionary? wordAtlas;
   final OfflineWordDictionary? offlineDictionary;
 
   Future<WordLookupEntry> lookupWord({
@@ -48,15 +52,22 @@ class WordLookupService {
     required LearningSettingsState settings,
   }) async {
     final String normalizedWord = _normalizeWord(rawWord);
+    // Offline-first chain: Word Atlas (illustrated, voiced) → ECDICT core →
+    // remote AI only when every local source misses.
+    final WordLookupEntry? offline =
+        await _lookupAtlas(normalizedWord) ??
+        await _lookupEcdict(normalizedWord);
+    if (offline != null) {
+      return offline;
+    }
     if (!_canUseRemoteProvider(settings)) {
-      return await _lookupOffline(normalizedWord) ??
-          _buildUnavailableEntry(
-            rawWord: normalizedWord,
-            messageCn: '本地词典未收录该词，可在设置中配置翻译 API 获取完整释义。',
-            messageEn:
-                'Not in the local dictionary. Configure a translation API in '
-                'Settings for a full definition.',
-          );
+      return _buildUnavailableEntry(
+        rawWord: normalizedWord,
+        messageCn: '本地词典未收录该词，可在设置中配置翻译 API 获取完整释义。',
+        messageEn:
+            'Not in the local dictionary. Configure a translation API in '
+            'Settings for a full definition.',
+      );
     }
     try {
       return remoteLookupOverride != null
@@ -71,20 +82,54 @@ class WordLookupService {
               settings: settings,
             );
     } catch (_) {
-      return await _lookupOffline(normalizedWord) ??
-          _buildUnavailableEntry(
-            rawWord: normalizedWord,
-            messageCn: '翻译服务不可用，本地词典也未收录该词。',
-            messageEn:
-                'Translation API unavailable and the word is not in the '
-                'local dictionary.',
-          );
+      return _buildUnavailableEntry(
+        rawWord: normalizedWord,
+        messageCn: '翻译服务不可用，本地词典也未收录该词。',
+        messageEn:
+            'Translation API unavailable and the word is not in the '
+            'local dictionary.',
+      );
     }
+  }
+
+  /// Word Atlas (词光) entry: curated senses, bilingual examples,
+  /// collocations, an illustration and recorded pronunciations.
+  Future<WordLookupEntry?> _lookupAtlas(String normalizedWord) async {
+    final WordAtlasDictionary? atlas = wordAtlas;
+    if (atlas == null) {
+      return null;
+    }
+    final WordAtlasEntry? entry = await atlas.lookup(normalizedWord);
+    if (entry == null || entry.senses.isEmpty) {
+      return null;
+    }
+    return WordLookupEntry(
+      word: entry.word,
+      phonetic: entry.ipaUs.isNotEmpty ? entry.ipaUs : entry.ipaUk,
+      type: '英文单词',
+      definitionEn: entry.senses
+          .map((WordAtlasSense s) => '${s.pos} ${s.en}'.trim())
+          .join('\n\n'),
+      usageEn: entry.collocations.isEmpty ? '' : entry.collocations.join('\n'),
+      exampleSentenceEn: entry.examples.isEmpty ? '' : entry.examples.first.en,
+      exampleSentenceCn: entry.examples.isEmpty
+          ? null
+          : entry.examples.first.zh,
+      definitionCn: entry.senses
+          .map((WordAtlasSense s) => '${s.pos} ${s.zh}'.trim())
+          .join('\n'),
+      sourceLabel: entry.cefr.isEmpty ? '词光词典' : '词光词典 · ${entry.cefr}',
+      illustrationUrl: entry.imageUrl,
+      wordAudioUrl: entry.usAudioUrl.isNotEmpty
+          ? entry.usAudioUrl
+          : entry.ukAudioUrl,
+      exampleAudioUrl: entry.exampleAudioUrl,
+    );
   }
 
   /// ECDICT core fallback: phonetic + POS + Chinese gloss with zero
   /// configuration, so lookups keep working offline.
-  Future<WordLookupEntry?> _lookupOffline(String normalizedWord) async {
+  Future<WordLookupEntry?> _lookupEcdict(String normalizedWord) async {
     final OfflineWordDictionary? dictionary = offlineDictionary;
     if (dictionary == null) {
       return null;

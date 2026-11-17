@@ -4,8 +4,38 @@ import 'package:common_learn_english/features/settings/presentation/settings_pro
 import 'package:common_learn_english/features/shared/data/word_lookup_service.dart';
 import 'package:common_learn_english/features/shared/domain/word_lookup_entry.dart';
 import 'package:common_learn_english/features/words/data/offline_word_dictionary.dart';
+import 'package:common_learn_english/features/words/data/word_atlas_dictionary.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class _FakeAtlas extends WordAtlasDictionary {
+  @override
+  Future<WordAtlasEntry?> lookup(String rawWord) async {
+    if (rawWord == 'library') {
+      return const WordAtlasEntry(
+        id: 'library',
+        word: 'library',
+        ipaUk: '/uk/',
+        ipaUs: '/us/',
+        senses: <WordAtlasSense>[
+          WordAtlasSense(
+            pos: 'n.',
+            zh: '图书馆；藏书室',
+            en: 'A place to borrow books.',
+          ),
+        ],
+        examples: <WordAtlasExample>[
+          WordAtlasExample(en: 'I go to the library.', zh: '我去图书馆。'),
+        ],
+        collocations: <String>['public library｜公共图书馆'],
+        tip: '',
+        cefr: 'A1',
+        topic: 'education',
+      );
+    }
+    return null;
+  }
+}
 
 class _FakeOfflineDictionary extends OfflineWordDictionary {
   @override
@@ -295,6 +325,55 @@ void main() {
     expect(entry.sourceLabel, '离线词典');
     expect(entry.definitionCn, 'a. 专注的, 献身的');
     expect(entry.phonetic, "'dedikeitid");
+  });
+
+  test('word atlas wins over ecdict and remote', () async {
+    int remoteCallCount = 0;
+    final WordLookupService service = WordLookupService(
+      wordAtlas: _FakeAtlas(),
+      offlineDictionary: _FakeOfflineDictionary(),
+      remoteLookupOverride:
+          ({
+            required String rawWord,
+            String? contextSentence,
+            required LearningSettingsState settings,
+          }) async {
+            remoteCallCount += 1;
+            throw StateError('remote must not run');
+          },
+    );
+
+    final WordLookupEntry entry = await service.lookupWord(
+      rawWord: 'library',
+      settings: LearningSettingsState.defaults().copyWith(
+        translationApiKey: 'demo-key',
+      ),
+    );
+
+    expect(remoteCallCount, 0);
+    expect(entry.sourceLabel, '词光词典 · A1');
+    expect(entry.definitionCn, contains('图书馆'));
+    expect(entry.definitionEn, contains('borrow books'));
+    expect(entry.exampleSentenceCn, '我去图书馆。');
+    expect(entry.usageEn, contains('public library'));
+    expect(entry.illustrationUrl, contains('/img/library.webp'));
+    expect(entry.wordAudioUrl, contains('/audio/us/library.mp3'));
+    expect(entry.exampleAudioUrl, contains('/audio/ex/library.mp3'));
+  });
+
+  test('falls through to ecdict when the atlas misses', () async {
+    final WordLookupService service = WordLookupService(
+      wordAtlas: _FakeAtlas(),
+      offlineDictionary: _FakeOfflineDictionary(),
+    );
+
+    final WordLookupEntry entry = await service.lookupWord(
+      rawWord: 'dedicated',
+      settings: LearningSettingsState.defaults(),
+    );
+
+    expect(entry.sourceLabel, '离线词典');
+    expect(entry.definitionCn, 'a. 专注的, 献身的');
   });
 
   test(

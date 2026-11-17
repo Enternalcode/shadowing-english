@@ -9,6 +9,10 @@ class WordLookupEntry {
     required this.definitionCn,
     required this.sourceLabel,
     this.contextMeaningCn,
+    this.exampleSentenceCn,
+    this.illustrationUrl,
+    this.wordAudioUrl,
+    this.exampleAudioUrl,
   });
 
   factory WordLookupEntry.fromJson(Map<dynamic, dynamic> json) {
@@ -22,6 +26,10 @@ class WordLookupEntry {
       definitionCn: json['definitionCn'] as String? ?? '',
       sourceLabel: json['sourceLabel'] as String? ?? '',
       contextMeaningCn: json['contextMeaningCn'] as String?,
+      exampleSentenceCn: json['exampleSentenceCn'] as String?,
+      illustrationUrl: json['illustrationUrl'] as String?,
+      wordAudioUrl: json['wordAudioUrl'] as String?,
+      exampleAudioUrl: json['exampleAudioUrl'] as String?,
     );
   }
 
@@ -34,6 +42,10 @@ class WordLookupEntry {
   final String definitionCn;
   final String sourceLabel;
   final String? contextMeaningCn;
+  final String? exampleSentenceCn;
+  final String? illustrationUrl;
+  final String? wordAudioUrl;
+  final String? exampleAudioUrl;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'word': word,
@@ -45,5 +57,9 @@ class WordLookupEntry {
     'definitionCn': definitionCn,
     'sourceLabel': sourceLabel,
     'contextMeaningCn': contextMeaningCn,
+    'exampleSentenceCn': exampleSentenceCn,
+    'illustrationUrl': illustrationUrl,
+    'wordAudioUrl': wordAudioUrl,
+    'exampleAudioUrl': exampleAudioUrl,
   };
 }

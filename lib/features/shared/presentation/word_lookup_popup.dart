@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit/media_kit.dart';
 
 import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../settings/presentation/settings_provider.dart';
@@ -53,6 +56,13 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
   String? _errorMessage;
   bool _isLoading = true;
   bool _isPronouncing = false;
+  final Player _audioPlayer = Player();
+
+  @override
+  void dispose() {
+    unawaited(_audioPlayer.dispose());
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -134,6 +144,24 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
       _isPronouncing = true;
     });
     widget.onPronounce?.call();
+
+    // Prefer the Word Atlas studio recordings over TTS when available.
+    final String? audioUrl = text == entry.word
+        ? entry.wordAudioUrl
+        : text == entry.exampleSentenceEn
+        ? entry.exampleAudioUrl
+        : null;
+    if (audioUrl != null) {
+      try {
+        await _audioPlayer.open(Media(audioUrl));
+        if (mounted) {
+          setState(() => _isPronouncing = false);
+        }
+        return;
+      } catch (_) {
+        // Fall through to TTS when the recording cannot play.
+      }
+    }
 
     try {
       await ref
@@ -376,6 +404,25 @@ class _WordLookupPopupBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        if (entry.illustrationUrl != null &&
+            entry.illustrationUrl!.isNotEmpty) ...<Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Image.network(
+              entry.illustrationUrl!,
+              height: 132,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder:
+                  (
+                    BuildContext context,
+                    Object error,
+                    StackTrace? stackTrace,
+                  ) => const SizedBox.shrink(),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -562,6 +609,17 @@ class _WordLookupPopupBody extends StatelessWidget {
                     color: AppDesignTokens.textPrimary,
                   ),
                 ),
+                if ((entry.exampleSentenceCn ?? '').isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    entry.exampleSentenceCn!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.5,
+                      color: AppDesignTokens.textSecondary,
+                    ),
+                  ),
+                ],
               ],
             ],
           ),
