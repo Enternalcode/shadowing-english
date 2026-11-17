@@ -8,6 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../router/app_router.dart';
+import '../../dictation/presentation/dictation_session_dialog.dart';
 import '../../guide/presentation/guide_screen.dart';
 import '../../home/presentation/learning_dashboard_provider.dart';
 import '../../lessons/domain/intensive_lesson.dart';
@@ -1755,11 +1756,42 @@ class PadLandscapePlayerScreenState
   }
 
   void _handleDictationLine(int index) {
+    if (!state.hasLines) {
+      _showMessage('没有可练的字幕行');
+      return;
+    }
+    final List<DictationLine> lines = state.lines
+        .map(
+          (PlayerSubtitleLine l) =>
+              DictationLine(english: l.english, chinese: l.chinese),
+        )
+        .toList(growable: false);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (_) => DictationSessionDialog(
+          lines: lines,
+          startIndex: index,
+          onPlayLine: _playDictationLine,
+        ),
+      ),
+    );
+  }
+
+  void _playDictationLine(int index) {
     setState(() {
-      state.selectLine(index);
+      if (state.isLooping &&
+          state.loopLineRange == (first: index, last: index)) {
+        state
+          ..selectLine(index)
+          ..isPlaying = true;
+      } else {
+        state.toggleLineLoopAt(index);
+      }
     });
+    _syncTranscriptReader();
     _seekToActiveLine();
-    _showMessage('已加入听写练习');
+    _applyPlaybackMode();
   }
 
   void _handleAiExplain(int index) => unawaited(_openLesson(index: index));
