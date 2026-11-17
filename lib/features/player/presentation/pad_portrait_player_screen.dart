@@ -1083,6 +1083,11 @@ class _PadPortraitPlayerScreenState
                                         startIndex: _dictationIndex,
                                         onPlayLine: _playDictationLine,
                                         onExit: _exitDictation,
+                                        episodeId: widget.episodeId,
+                                        course: course?.title ?? '未命名课程',
+                                        episode: episode == null
+                                            ? '第 01 集'
+                                            : '第 ${episode.numberStr} 集',
                                       )
                                     : PlayerTranscriptPanel(
                                         lessonPanel: EpisodeLessonList(
@@ -1138,16 +1143,20 @@ class _PadPortraitPlayerScreenState
                                         loopLastLine: state.loopLineRange?.last,
                                         onClearLoop: _handleClearLoop,
                                         onDictationLine: _handleDictationLine,
-                                        dictationControl: TextButton.icon(
-                                          style: TextButton.styleFrom(
+                                        dictationControl: FilledButton.icon(
+                                          style: FilledButton.styleFrom(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
+                                              horizontal: 12,
                                             ),
                                             textStyle: const TextStyle(
                                               fontSize: 12,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w800,
                                             ),
                                             minimumSize: const Size(0, 36),
+                                            backgroundColor: const Color(
+                                              0xFF46A302,
+                                            ),
+                                            foregroundColor: Colors.white,
                                           ),
                                           onPressed: () => _handleDictationLine(
                                             state.activeLineIndex < 0
@@ -1158,7 +1167,7 @@ class _PadPortraitPlayerScreenState
                                             Icons.keyboard_rounded,
                                             size: 16,
                                           ),
-                                          label: const Text('听写'),
+                                          label: const Text('听写练习'),
                                         ),
                                         onAiExplain: _handleAiExplain,
                                         onAssessLine: _handleAssessLine,
@@ -1774,8 +1783,12 @@ class _PadPortraitPlayerScreenState
 
   List<DictationLine> get _dictationLines => state.lines
       .map(
-        (PlayerSubtitleLine l) =>
-            DictationLine(english: l.english, chinese: l.chinese),
+        (PlayerSubtitleLine l) => DictationLine(
+          english: l.english,
+          chinese: l.chinese,
+          time: l.startTime,
+          lineKey: '${l.startMs}-${l.endMs}',
+        ),
       )
       .toList(growable: false);
 

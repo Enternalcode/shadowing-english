@@ -5,16 +5,26 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
+import '../../shared/presentation/word_lookup_popup.dart';
+import '../../words/presentation/word_book_provider.dart';
 import '../data/dictation_stats_store.dart';
 import '../domain/dictation_diff.dart';
 
 class DictationLine {
-  const DictationLine({required this.english, this.chinese = ''});
+  const DictationLine({
+    required this.english,
+    this.chinese = '',
+    this.time = '',
+    this.lineKey = '',
+  });
 
   final String english;
   final String chinese;
+  final String time;
+  final String lineKey;
 }
 
 /// Embedded sentence-level blind dictation: replaces the transcript panel so
@@ -27,6 +37,9 @@ class DictationPanel extends ConsumerStatefulWidget {
     required this.onPlayLine,
     required this.onExit,
     this.startIndex = 0,
+    this.episodeId = '',
+    this.course = '',
+    this.episode = '',
     super.key,
   });
 
@@ -34,6 +47,9 @@ class DictationPanel extends ConsumerStatefulWidget {
   final void Function(int index) onPlayLine;
   final VoidCallback onExit;
   final int startIndex;
+  final String episodeId;
+  final String course;
+  final String episode;
 
   @override
   ConsumerState<DictationPanel> createState() => _DictationPanelState();
@@ -55,7 +71,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   final Set<int> _revealed = <int>{};
   final Set<int> _seen = <int>{};
   final Set<int> _wrongLines = <int>{};
+  final Set<int> _recorded = <int>{};
   final Map<int, int> _lineBest = <int, int>{};
+  final Map<int, int> _lineRejectCount = <int, int>{};
+  final Map<int, Set<String>> _lineErrorWords = <int, Set<String>>{};
   int _streak = 0;
   int _lastDelta = 0;
   double _keyVolume = 90;
@@ -255,6 +274,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
     if (wrongAt != null) {
       _keySound(false);
+      _recordRejection(wrongAt);
       if (_rejectedAt != wrongAt) {
         _rejectedAt = wrongAt;
         _rejectTimer?.cancel();
@@ -273,6 +293,127 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     if (wrongAt == null && typedL.isNotEmpty && typedL.length == expL.length) {
       _check();
     }
+  }
+
+  /// qwerty-learner's wrongCount: every rejected keypress bumps the count for
+  /// the line and remembers which word it landed on. At 3+ misses a tip bar
+  /// offers to save the whole sentence plus its trouble words.
+  void _recordRejection(int letterIndex) {
+    final int idx = _index;
+    _lineRejectCount[idx] = (_lineRejectCount[idx] ?? 0) + 1;
+    final String word = _wordAtLetter(_line.english, letterIndex);
+    if (word.isNotEmpty) {
+      (_lineErrorWords[idx] ??= <String>{}).add(word);
+    }
+  }
+
+  String _wordAtLetter(String line, int letterIndex) {
+    final List<String> words = dictationTokens(line);
+    int cursor = 0;
+    for (final String word in words) {
+      final int len = _lettersOf(word).length;
+      if (len > 0 && letterIndex < cursor + len) return word;
+      cursor += len;
+    }
+    return '';
+  }
+
+  /// Save the current line to the phrase book and every word the user
+  /// stumbled on to the word book (favorited), same as collecting from
+  /// subtitles.
+  void _recordLine() {
+    final DictationLine line = _line;
+    ref
+        .read(phraseBookProvider.notifier)
+        .addPhraseIfMissing(
+          english: line.english,
+          chinese: line.chinese,
+          course: widget.course,
+          episode: widget.episode,
+          time: line.time,
+          episodeId: widget.episodeId.isEmpty ? null : widget.episodeId,
+          note: '听写错句',
+        );
+    final Set<String> words = _lineErrorWords[_index] ?? <String>{};
+    int saved = 0;
+    for (final String word in words) {
+      final bool ok = ref
+          .read(wordBookProvider.notifier)
+          .addFavoriteWord(
+            rawWord: word,
+            episodeId: widget.episodeId,
+            course: widget.course,
+            episode: widget.episode,
+            time: line.time,
+            lineKey: line.lineKey.isEmpty ? line.time : line.lineKey,
+            sentence: line.english,
+            chinese: line.chinese,
+          );
+      if (ok) saved++;
+    }
+    setState(() => _recorded.add(_index));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            saved > 0 ? '已记录本句 + $saved 个错词（短语库/生词本）' : '已记录本句到短语库',
+          ),
+        ),
+      );
+    _focusNode.requestFocus();
+  }
+
+  /// Tap a hidden word slot → dictionary card for that word, same lookup
+  /// surface as tapping a word in the subtitle list.
+  void _showWordLookup(String word) {
+    final DictationLine line = _line;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (BuildContext ctx) => Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          insetPadding: const EdgeInsets.all(24),
+          child: WordLookupPopupCard(
+            rawWord: word,
+            contextSentence: line.english,
+            episodeId: widget.episodeId.isEmpty ? null : widget.episodeId,
+            contextTime: line.time.isEmpty ? null : line.time,
+            maxHeight: MediaQuery.of(ctx).size.height * 0.8,
+            onClose: () => Navigator.of(ctx).pop(),
+            onFavorite: () {
+              ref
+                  .read(wordBookProvider.notifier)
+                  .addFavoriteWord(
+                    rawWord: word,
+                    episodeId: widget.episodeId,
+                    course: widget.course,
+                    episode: widget.episode,
+                    time: line.time,
+                    lineKey: line.lineKey.isEmpty ? line.time : line.lineKey,
+                    sentence: line.english,
+                    chinese: line.chinese,
+                  );
+            },
+            onCollect: () {
+              ref
+                  .read(phraseBookProvider.notifier)
+                  .addPhraseIfMissing(
+                    english: line.english,
+                    chinese: line.chinese,
+                    course: widget.course,
+                    episode: widget.episode,
+                    time: line.time,
+                    episodeId: widget.episodeId.isEmpty
+                        ? null
+                        : widget.episodeId,
+                  );
+            },
+          ),
+        ),
+      ).then((_) => _focusNode.requestFocus()),
+    );
   }
 
   void _rollbackRejection() {
@@ -601,6 +742,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                     typed: _controller.text,
                     reveal: _showAnswer,
                     showFirstLetters: _hintLetters,
+                    onWordTap: _showWordLookup,
                   ),
                   const SizedBox(height: 10),
                   Text(
@@ -615,6 +757,50 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             ),
           ),
         ),
+        if ((_lineRejectCount[_index] ?? 0) >= 3 && !_recorded.contains(_index))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7E6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFFD591)),
+              ),
+              child: Row(
+                children: <Widget>[
+                  const Icon(
+                    Icons.lightbulb_outline_rounded,
+                    size: 16,
+                    color: Color(0xFFB45309),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '这句已错 ${_lineRejectCount[_index]} 次，值得记下来',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFB45309),
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 32),
+                      textStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onPressed: _recordLine,
+                    child: const Text('记录本句+错词'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(
@@ -783,12 +969,14 @@ class _SlotLine extends StatelessWidget {
     required this.typed,
     this.reveal = false,
     this.showFirstLetters = false,
+    this.onWordTap,
   });
 
   final String line;
   final String typed;
   final bool reveal;
   final bool showFirstLetters;
+  final ValueChanged<String>? onWordTap;
 
   static const Color _ok = Color(0xFF1A7F37);
   static const Color _wrong = Color(0xFFD13438);
@@ -814,11 +1002,21 @@ class _SlotLine extends StatelessWidget {
           ),
         );
       }
+      final Widget group = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Row(mainAxisSize: MainAxisSize.min, children: cells),
+      );
       groups.add(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: Row(mainAxisSize: MainAxisSize.min, children: cells),
-        ),
+        onWordTap == null
+            ? group
+            : GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onWordTap!(word),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: group,
+                ),
+              ),
       );
     }
     return Wrap(
