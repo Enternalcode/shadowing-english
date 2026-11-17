@@ -1160,6 +1160,28 @@ class PadLandscapePlayerScreenState
                                       loopLastLine: state.loopLineRange?.last,
                                       onClearLoop: _handleClearLoop,
                                       onDictationLine: _handleDictationLine,
+                                      dictationControl: TextButton.icon(
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          textStyle: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          minimumSize: const Size(0, 36),
+                                        ),
+                                        onPressed: () => _handleDictationLine(
+                                          state.activeLineIndex < 0
+                                              ? 0
+                                              : state.activeLineIndex,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.keyboard_rounded,
+                                          size: 16,
+                                        ),
+                                        label: const Text('听写'),
+                                      ),
                                       onAiExplain: _handleAiExplain,
                                       onAssessLine: _handleAssessLine,
                                       pronunciationUnavailableReasonForLine:

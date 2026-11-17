@@ -41,6 +41,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
     this.onDeleteAiSubtitles,
     this.onRegenerateAiLine,
     this.lessonPanel,
+    this.dictationControl,
     super.key,
   });
 
@@ -79,6 +80,7 @@ class PlayerTranscriptPanel extends StatefulWidget {
   final VoidCallback? onDeleteAiSubtitles;
   final Future<void> Function(int index)? onRegenerateAiLine;
   final Widget? lessonPanel;
+  final Widget? dictationControl;
 
   @override
   State<PlayerTranscriptPanel> createState() => _PlayerTranscriptPanelState();
@@ -148,6 +150,7 @@ class _PlayerTranscriptPanelState extends State<PlayerTranscriptPanel> {
                         : '选择循环区间',
                   ),
                 ),
+          dictationControl: widget.dictationControl,
           showCurrentOnly: _showCurrentOnly,
           showLessons: _showLessons,
           onLessonsSelected: widget.lessonPanel == null
@@ -217,12 +220,14 @@ class _PanelHeader extends StatelessWidget {
     required this.showLessons,
     this.onLessonsSelected,
     this.loopControl,
+    this.dictationControl,
   });
   final bool showCurrentOnly;
   final ValueChanged<bool> onViewChanged;
   final bool showLessons;
   final VoidCallback? onLessonsSelected;
   final Widget? loopControl;
+  final Widget? dictationControl;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -250,6 +255,7 @@ class _PanelHeader extends StatelessWidget {
                   ),
                 ),
                 if (loopControl != null) loopControl!,
+                if (dictationControl != null) dictationControl!,
               ],
             ),
             const SizedBox(height: 4),
