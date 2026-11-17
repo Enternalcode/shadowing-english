@@ -36,6 +36,7 @@ class DictationPanel extends ConsumerStatefulWidget {
   const DictationPanel({
     required this.lines,
     required this.onPlayLine,
+    required this.onReplayLine,
     required this.onExit,
     this.startIndex = 0,
     this.episodeId = '',
@@ -47,6 +48,7 @@ class DictationPanel extends ConsumerStatefulWidget {
 
   final List<DictationLine> lines;
   final void Function(int index) onPlayLine;
+  final VoidCallback onReplayLine;
   final VoidCallback onExit;
   final int startIndex;
   final String episodeId;
@@ -282,6 +284,12 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    // Let modifier combos (Ctrl+R etc.) bubble up to CallbackShortcuts.
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
     final LogicalKeyboardKey key = event.logicalKey;
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
@@ -311,8 +319,25 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     if (_checked) {
       _checked = false;
       _score = null;
+      _showAnswer = false;
     }
     setState(() {});
+  }
+
+  /// Back to the empty-slot state for another pass at this line — replays
+  /// the sentence once so the retake starts with a fresh listen.
+  void _retryLine() {
+    _rejectTimer?.cancel();
+    setState(() {
+      _typed = '';
+      _prevLetterCount = 0;
+      _rejectedAt = null;
+      _checked = false;
+      _score = null;
+      _showAnswer = false;
+    });
+    widget.onReplayLine();
+    _focusNode.requestFocus();
   }
 
   /// qwerty-learner feel: every accepted letter clicks into its slot; the
@@ -324,6 +349,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     if (_checked) {
       _checked = false;
       _score = null;
+      _showAnswer = false;
     }
 
     // Reinforcement pass: once the sentence is fully typed, the next
@@ -594,10 +620,14 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.tab): () =>
-            widget.onPlayLine(_index),
+            widget.onReplayLine(),
+        const SingleActivator(LogicalKeyboardKey.space): () =>
+            widget.onReplayLine(),
         const SingleActivator(LogicalKeyboardKey.tab, shift: true): () {
           if (_pos > 0) _openPos(_pos - 1);
         },
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true):
+            _retryLine,
       },
       child: Focus(
         focusNode: _focusNode,
@@ -632,7 +662,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                 ),
                 IconButton(
                   tooltip: '重播本句',
-                  onPressed: () => widget.onPlayLine(_index),
+                  onPressed: widget.onReplayLine,
                   icon: const Icon(Icons.volume_up_rounded),
                 ),
                 IconButton(
@@ -656,10 +686,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             ),
             Text(
               _checked
-                  ? '继续输入可重新校验，Enter 下一句'
+                  ? '敲字母继续重练 · Ctrl+R 回到横线 · Enter 下一句'
                   : _showSubtitles
-                  ? '听音后直接敲键盘（错键会弹回）；Enter 校验 · Tab 重播'
-                  : '盲听后直接敲键盘，错键会自动弹回；Enter 校验 · Tab 重播 · Shift+Tab 上一句',
+                  ? '敲键盘输入（错键弹回）；Tab/空格 重播 · Enter 校验 · Ctrl+R 重练'
+                  : '盲听后敲键盘（错键弹回）；Tab/空格 重播 · Enter 校验 · Ctrl+R 重练 · Shift+Tab 上一句',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppDesignTokens.textSecondary,
@@ -713,6 +743,14 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                   label: Text(_showAnswer ? '隐藏答案' : '显示答案'),
                 ),
                 const Spacer(),
+                if (_checked) ...<Widget>[
+                  OutlinedButton.icon(
+                    onPressed: _retryLine,
+                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    label: const Text('再练本句 (Ctrl+R)'),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 FilledButton(
                   onPressed: _primaryAction,
                   child: Text(_checked ? '下一句 (Enter)' : '校验 (Enter)'),
@@ -776,7 +814,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             behavior: HitTestBehavior.opaque,
             onTap: () {
               _focusNode.requestFocus();
-              widget.onPlayLine(_index);
+              widget.onReplayLine();
             },
             child: Center(
               child: Column(
@@ -863,7 +901,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               OutlinedButton.icon(
                 onPressed: () {
                   _focusNode.requestFocus();
-                  widget.onPlayLine(_index);
+                  widget.onReplayLine();
                 },
                 icon: const Icon(Icons.replay_rounded, size: 18),
                 label: const Text('重播 (Tab)'),

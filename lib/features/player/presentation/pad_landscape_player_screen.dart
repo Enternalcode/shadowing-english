@@ -1141,6 +1141,7 @@ class PadLandscapePlayerScreenState
                                             lines: _dictationLines,
                                             startIndex: _dictationIndex,
                                             onPlayLine: _playDictationLine,
+                                            onReplayLine: _replayDictationLine,
                                             onExit: _exitDictation,
                                             onTypingStarted:
                                                 _handleDictationTypingStarted,
@@ -1882,7 +1883,14 @@ class PadLandscapePlayerScreenState
       )
       .toList(growable: false);
 
-  void _playDictationLine(int index) {
+  /// Entering/jumping a line: loop the sentence until the first keystroke.
+  void _playDictationLine(int index) => _startDictationLine(index, loop: true);
+
+  /// Manual replay (button/Tab/space): play the line once and stop.
+  void _replayDictationLine() =>
+      _startDictationLine(_dictationIndex, loop: false);
+
+  void _startDictationLine(int index, {required bool loop}) {
     setState(() {
       if (state.isLooping) {
         state.exitLoopAtStart();
@@ -1892,7 +1900,7 @@ class PadLandscapePlayerScreenState
         ..isPlaying = true;
       _dictationIndex = index;
       _dictationStopAtMs = state.videoEndMsForLine(index);
-      _dictationLooping = true;
+      _dictationLooping = loop;
     });
     _syncTranscriptReader();
     _seekToActiveLine();
