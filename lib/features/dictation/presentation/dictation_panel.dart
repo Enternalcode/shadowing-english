@@ -58,8 +58,8 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   final Map<int, int> _lineBest = <int, int>{};
   int _streak = 0;
   int _lastDelta = 0;
-  Timer? _autoAdvance;
   final Player _sfx = Player();
+  final Player _keySfx = Player();
 
   int _sessionAttempts = 0;
   int _sessionCorrect = 0;
@@ -76,6 +76,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
     _pos = _order.indexOf(widget.startIndex.clamp(0, widget.lines.length - 1));
     if (_pos < 0) _pos = 0;
     unawaited(_sfx.setVolume(60));
+    unawaited(_keySfx.setVolume(45));
+    unawaited(
+      _keySfx.open(Media('asset:///assets/sfx/click.wav'), play: false),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _openPos(_pos));
     _refreshToday();
   }
@@ -90,7 +94,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
   @override
   void dispose() {
-    _autoAdvance?.cancel();
+    unawaited(_keySfx.dispose());
     unawaited(_sfx.dispose());
     _controller.dispose();
     _focusNode.dispose();
@@ -105,7 +109,6 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
   }
 
   void _openPos(int pos) {
-    _autoAdvance?.cancel();
     setState(() {
       _pos = pos;
       _checked = false;
@@ -171,7 +174,11 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
         _sessionErrors[w] = (_sessionErrors[w] ?? 0) + 1;
       }
     });
-    unawaited(_playSfx(pct == 100 ? 'ding.wav' : 'blip.wav'));
+    unawaited(
+      _playSfx(
+        pct == 100 ? (_streak >= 3 ? 'combo.wav' : 'ding.wav') : 'blip.wav',
+      ),
+    );
     unawaited(
       ref
           .read(dictationStatsStoreProvider)
@@ -183,13 +190,6 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
           )
           .then((_) => _refreshToday()),
     );
-    if (score.percent == 100) {
-      _autoAdvance = Timer(const Duration(milliseconds: 700), () {
-        if (mounted && _checked && _score?.percent == 100) {
-          _advance();
-        }
-      });
-    }
     _focusNode.requestFocus();
   }
 
@@ -209,6 +209,10 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
   void _speakWord(String word) {
     unawaited(ref.read(wordPronunciationServiceProvider).speak(word));
+  }
+
+  void _keyClick() {
+    unawaited(_keySfx.seek(Duration.zero).then((_) => _keySfx.play()));
   }
 
   void _retryWrongLines() {
@@ -334,6 +338,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             enableSuggestions: false,
             onChanged: (_) {
               if (_checked) setState(() => _checked = false);
+              _keyClick();
             },
             onSubmitted: (_) => _primaryAction(),
             decoration: const InputDecoration(
@@ -418,31 +423,59 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       );
     }
     final int wordCount = dictationTokens(_line.english).length;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          const Icon(
-            Icons.headphones_rounded,
-            size: 36,
-            color: AppDesignTokens.textSecondary,
-          ),
-          const SizedBox(height: 10),
-          _MaskedText(
-            line: _line.english,
-            active: true,
-            showLetters: _hintLetters,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '$wordCount 词 · 听完打字',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppDesignTokens.textSecondary,
+    return Column(
+      children: <Widget>[
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => widget.onPlayLine(_index),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Icon(
+                    Icons.headphones_rounded,
+                    size: 36,
+                    color: AppDesignTokens.textSecondary,
+                  ),
+                  const SizedBox(height: 10),
+                  _MaskedText(
+                    line: _line.english,
+                    active: true,
+                    showLetters: _hintLetters,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '$wordCount 词 · 点此处或 Tab 重播',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppDesignTokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: () => widget.onPlayLine(_index),
+                icon: const Icon(Icons.replay_rounded, size: 18),
+                label: const Text('重播 (Tab)'),
+              ),
+              const SizedBox(width: 12),
+              FilledButton(
+                onPressed: _primaryAction,
+                child: Text(_checked ? '下一句 (Enter)' : '校验 (Enter)'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

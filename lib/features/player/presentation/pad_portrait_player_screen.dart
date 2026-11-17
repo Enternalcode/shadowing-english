@@ -110,6 +110,7 @@ class _PadPortraitPlayerScreenState
   bool _generatingAiSubtitles = false;
   bool _dictationActive = false;
   int _dictationIndex = 0;
+  int? _dictationStopAtMs;
   AsrSubtitleCancellationToken? _aiSubtitleCancellationToken;
   double? _aiSubtitleProgressValue;
   String? _aiSubtitleProgressText;
@@ -512,6 +513,12 @@ class _PadPortraitPlayerScreenState
         lineChanged = state.syncWithTimestamp(position.inMilliseconds);
       }
     });
+    if (_dictationActive &&
+        _dictationStopAtMs != null &&
+        position.inMilliseconds >= _dictationStopAtMs!) {
+      _dictationStopAtMs = null;
+      _stopVideo();
+    }
     _syncTranscriptReader();
 
     if (wasPlaying) {
@@ -1078,90 +1085,102 @@ class _PadPortraitPlayerScreenState
                                         onExit: _exitDictation,
                                       )
                                     : PlayerTranscriptPanel(
-                                  lessonPanel: EpisodeLessonList(
-                                    episodeId: widget.episodeId,
-                                    onOpen: (IntensiveLesson lesson) =>
-                                        unawaited(_openLesson(saved: lesson)),
-                                  ),
-                                  episodeId: widget.episodeId,
-                                  lines: state.lines,
-                                  activeIndex: state.activeLineIndex,
-                                  subtitleMode: state.subtitleMode,
-                                  currentWordIndex: state.currentWordIndex,
-                                  fontScale: settings.fontScale,
-                                  highlightWords: settings.highlightWords,
-                                  subtitleLetterCase:
-                                      settings.subtitleLetterCase,
-                                  subtitleWordHighlightStyle:
-                                      settings.subtitleWordHighlightStyle,
-                                  subtitleWordHighlightBorderWidth:
-                                      settings.subtitleWordHighlightBorderWidth,
-                                  onTapLine: _goToLine,
-                                  onCollectWord: (String word) =>
-                                      _handleCollectWord(word, courseContext),
-                                  onCollectWordAtTime:
-                                      (String word, String time) =>
-                                          _handleCollectWord(
-                                            word,
-                                            courseContext,
-                                            time,
+                                        lessonPanel: EpisodeLessonList(
+                                          episodeId: widget.episodeId,
+                                          onOpen: (IntensiveLesson lesson) =>
+                                              unawaited(
+                                                _openLesson(saved: lesson),
+                                              ),
+                                        ),
+                                        episodeId: widget.episodeId,
+                                        lines: state.lines,
+                                        activeIndex: state.activeLineIndex,
+                                        subtitleMode: state.subtitleMode,
+                                        currentWordIndex:
+                                            state.currentWordIndex,
+                                        fontScale: settings.fontScale,
+                                        highlightWords: settings.highlightWords,
+                                        subtitleLetterCase:
+                                            settings.subtitleLetterCase,
+                                        subtitleWordHighlightStyle:
+                                            settings.subtitleWordHighlightStyle,
+                                        subtitleWordHighlightBorderWidth: settings
+                                            .subtitleWordHighlightBorderWidth,
+                                        onTapLine: _goToLine,
+                                        onCollectWord: (String word) =>
+                                            _handleCollectWord(
+                                              word,
+                                              courseContext,
+                                            ),
+                                        onCollectWordAtTime:
+                                            (String word, String time) =>
+                                                _handleCollectWord(
+                                                  word,
+                                                  courseContext,
+                                                  time,
+                                                ),
+                                        onFavoriteWord: _handleFavoriteWord,
+                                        onBookmarkLine: (int index) =>
+                                            _handleBookmarkLine(
+                                              index,
+                                              courseContext,
+                                            ),
+                                        onLoopFromLine: _handleLoopFromLine,
+                                        onLoopLinesSelected:
+                                            _handleLoopLinesSelected,
+                                        onLoopSelectionChanged:
+                                            _handleLoopSelectionChanged,
+                                        selectingLoopRange:
+                                            state.isSelectingLoopRange,
+                                        isLooping: state.isLooping,
+                                        loopFirstLine:
+                                            state.loopLineRange?.first,
+                                        loopLastLine: state.loopLineRange?.last,
+                                        onClearLoop: _handleClearLoop,
+                                        onDictationLine: _handleDictationLine,
+                                        dictationControl: TextButton.icon(
+                                          style: TextButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                            textStyle: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                            minimumSize: const Size(0, 36),
                                           ),
-                                  onFavoriteWord: _handleFavoriteWord,
-                                  onBookmarkLine: (int index) =>
-                                      _handleBookmarkLine(index, courseContext),
-                                  onLoopFromLine: _handleLoopFromLine,
-                                  onLoopLinesSelected: _handleLoopLinesSelected,
-                                  onLoopSelectionChanged:
-                                      _handleLoopSelectionChanged,
-                                  selectingLoopRange:
-                                      state.isSelectingLoopRange,
-                                  isLooping: state.isLooping,
-                                  loopFirstLine: state.loopLineRange?.first,
-                                  loopLastLine: state.loopLineRange?.last,
-                                  onClearLoop: _handleClearLoop,
-                                  onDictationLine: _handleDictationLine,
-                                  dictationControl: TextButton.icon(
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                      ),
-                                      textStyle: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      minimumSize: const Size(0, 36),
-                                    ),
-                                    onPressed: () => _handleDictationLine(
-                                      state.activeLineIndex < 0
-                                          ? 0
-                                          : state.activeLineIndex,
-                                    ),
-                                    icon: const Icon(
-                                      Icons.keyboard_rounded,
-                                      size: 16,
-                                    ),
-                                    label: const Text('听写'),
-                                  ),
-                                  onAiExplain: _handleAiExplain,
-                                  onAssessLine: _handleAssessLine,
-                                  pronunciationUnavailableReasonForLine:
-                                      _pronunciationUnavailableReasonForLine,
-                                  loopingLineIndex: state.loopLineRange?.first,
-                                  isPlaying: state.isPlaying,
-                                  onTogglePlaying: _handleTogglePlaying,
-                                  onPronounce: _stopVideo,
-                                  onRegenerateAiSubtitles:
-                                      _usingAiSubtitles &&
-                                          !_generatingAiSubtitles
-                                      ? _handleRegenerateAiSubtitles
-                                      : null,
-                                  onDeleteAiSubtitles: _usingAiSubtitles
-                                      ? _handleDeleteAiSubtitles
-                                      : null,
-                                  onRegenerateAiLine: _usingAiSubtitles
-                                      ? _handleRegenerateAiLine
-                                      : null,
-                                )
+                                          onPressed: () => _handleDictationLine(
+                                            state.activeLineIndex < 0
+                                                ? 0
+                                                : state.activeLineIndex,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.keyboard_rounded,
+                                            size: 16,
+                                          ),
+                                          label: const Text('听写'),
+                                        ),
+                                        onAiExplain: _handleAiExplain,
+                                        onAssessLine: _handleAssessLine,
+                                        pronunciationUnavailableReasonForLine:
+                                            _pronunciationUnavailableReasonForLine,
+                                        loopingLineIndex:
+                                            state.loopLineRange?.first,
+                                        isPlaying: state.isPlaying,
+                                        onTogglePlaying: _handleTogglePlaying,
+                                        onPronounce: _stopVideo,
+                                        onRegenerateAiSubtitles:
+                                            _usingAiSubtitles &&
+                                                !_generatingAiSubtitles
+                                            ? _handleRegenerateAiSubtitles
+                                            : null,
+                                        onDeleteAiSubtitles: _usingAiSubtitles
+                                            ? _handleDeleteAiSubtitles
+                                            : null,
+                                        onRegenerateAiLine: _usingAiSubtitles
+                                            ? _handleRegenerateAiLine
+                                            : null,
+                                      )
                               : canGenerateAiSubtitles
                               ? PlayerSubtitleList(
                                   episodeId: widget.episodeId,
@@ -1744,7 +1763,10 @@ class _PadPortraitPlayerScreenState
   }
 
   void _exitDictation() {
-    setState(() => _dictationActive = false);
+    setState(() {
+      _dictationActive = false;
+      _dictationStopAtMs = null;
+    });
     if (state.isLooping) {
       _handleClearLoop();
     }
@@ -1759,14 +1781,13 @@ class _PadPortraitPlayerScreenState
 
   void _playDictationLine(int index) {
     setState(() {
-      if (state.isLooping &&
-          state.loopLineRange == (first: index, last: index)) {
-        state
-          ..selectLine(index)
-          ..isPlaying = true;
-      } else {
-        state.toggleLineLoopAt(index);
+      if (state.isLooping) {
+        state.exitLoopAtStart();
       }
+      state
+        ..selectLine(index)
+        ..isPlaying = true;
+      _dictationStopAtMs = state.videoEndMsForLine(index);
     });
     _syncTranscriptReader();
     _seekToActiveLine();
