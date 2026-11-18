@@ -246,10 +246,23 @@ class PadLandscapePlayerScreenState
         (Hive.box<String>('prefs').get('dictation_auto_enter') ?? 'true') ==
             'true';
     if (autoEnter) {
-      _handleDictationLine(
-        state.activeLineIndex < 0 ? 0 : state.activeLineIndex,
-      );
+      _handleDictationLine(_resumeDictationLine());
     }
+  }
+
+  /// Last line practiced in dictation for this episode (persisted per
+  /// episode); falls back to the currently active subtitle line.
+  int _resumeDictationLine() {
+    final int fallback = state.activeLineIndex < 0 ? 0 : state.activeLineIndex;
+    if (!Hive.isBoxOpen('prefs')) return fallback;
+    final String? raw = Hive.box<String>(
+      'prefs',
+    ).get('dictation_line_${widget.episodeId}');
+    final int? saved = raw == null ? null : int.tryParse(raw);
+    if (saved == null || saved < 0 || saved >= state.lines.length) {
+      return fallback;
+    }
+    return saved;
   }
 
   Future<void> _initVideo() async {
@@ -1237,9 +1250,7 @@ class PadLandscapePlayerScreenState
                                               ),
                                               onPressed: () =>
                                                   _handleDictationLine(
-                                                    state.activeLineIndex < 0
-                                                        ? 0
-                                                        : state.activeLineIndex,
+                                                    _resumeDictationLine(),
                                                   ),
                                               icon: const Icon(
                                                 Icons.keyboard_rounded,
@@ -1911,6 +1922,13 @@ class PadLandscapePlayerScreenState
       _dictationStopAtMs = state.videoEndMsForLine(index);
       _dictationLooping = loop;
     });
+    if (Hive.isBoxOpen('prefs')) {
+      unawaited(
+        Hive.box<String>(
+          'prefs',
+        ).put('dictation_line_${widget.episodeId}', '$index'),
+      );
+    }
     _syncTranscriptReader();
     _seekToActiveLine();
     _applyPlaybackMode();
