@@ -14,6 +14,7 @@ import '../../text_import/data/lesson_from_text_generator.dart';
 import '../data/pattern_ai_service.dart';
 import '../data/pattern_book_provider.dart';
 import '../domain/sentence_pattern.dart';
+import 'widgets/pattern_example_tile.dart';
 
 /// The saved sentence-pattern library: review cards, progressively
 /// generate more colloquial examples, or turn a pattern into a real
@@ -317,18 +318,10 @@ class _PatternCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      '${i + 1}.',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppDesignTokens.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        item.examples[i],
-                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                      child: PatternExampleTile(
+                        index: i + 1,
+                        sentence: item.examples[i],
                       ),
                     ),
                     InkWell(

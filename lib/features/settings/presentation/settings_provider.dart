@@ -55,6 +55,16 @@ const List<String> playbackSpeedOptions = <String>[
   '1.25×',
   '1.5×',
 ];
+
+/// Reasoning-effort choices for AI chat providers. 'auto' sends nothing and
+/// keeps each provider's default; the rest map to `reasoning_effort`.
+const List<String> aiReasoningEffortOptions = <String>[
+  'auto',
+  'low',
+  'medium',
+  'high',
+];
+
 const List<String> translationProviderOptions = <String>[
   'OpenAI',
   'OpenRouter',
@@ -173,6 +183,7 @@ class LearningSettingsState {
     required this.ttsEngine,
     required this.ttsVoice,
     required this.ttsRate,
+    this.aiReasoningEffort = 'low',
   });
 
   factory LearningSettingsState.defaults() {
@@ -238,6 +249,16 @@ class LearningSettingsState {
   final String ttsVoice;
   final double ttsRate;
 
+  /// Reasoning depth sent to OpenAI-compatible chat providers.
+  /// 'auto' means "don't send the parameter" (provider default).
+  /// 'low'/'medium'/'high' map to the `reasoning_effort` request field
+  /// (StepFun step-3.x/5, OpenAI o-series, OpenRouter reasoning models).
+  final String aiReasoningEffort;
+
+  /// Value to put in request bodies; null when 'auto' (param omitted).
+  String? get reasoningEffortParam =>
+      aiReasoningEffort == 'auto' ? null : aiReasoningEffort;
+
   LearningSettingsState copyWith({
     String? subtitleMode,
     String? subtitleLetterCase,
@@ -266,6 +287,7 @@ class LearningSettingsState {
     String? ttsEngine,
     String? ttsVoice,
     double? ttsRate,
+    String? aiReasoningEffort,
   }) {
     return LearningSettingsState(
       subtitleMode: subtitleMode ?? this.subtitleMode,
@@ -302,6 +324,7 @@ class LearningSettingsState {
       ttsEngine: ttsEngine ?? this.ttsEngine,
       ttsVoice: ttsVoice ?? this.ttsVoice,
       ttsRate: ttsRate ?? this.ttsRate,
+      aiReasoningEffort: aiReasoningEffort ?? this.aiReasoningEffort,
     );
   }
 
@@ -436,6 +459,10 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
         ttsEngine: _stringOrNull(json['ttsEngine']),
         ttsVoice: _stringOrNull(json['ttsVoice']),
         ttsRate: _doubleOrNull(json['ttsRate']),
+        aiReasoningEffort:
+            aiReasoningEffortOptions.contains(json['aiReasoningEffort'])
+            ? json['aiReasoningEffort'] as String
+            : null,
       );
     } catch (_) {
       return defaults;
@@ -655,6 +682,12 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
     _persist();
   }
 
+  void setAiReasoningEffort(String value) {
+    if (!aiReasoningEffortOptions.contains(value)) return;
+    state = state.copyWith(aiReasoningEffort: value);
+    _persist();
+  }
+
   void resetToDefaults() {
     state = LearningSettingsState.defaults();
     _persist();
@@ -694,6 +727,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
           'ttsEngine': state.ttsEngine,
           'ttsVoice': state.ttsVoice,
           'ttsRate': state.ttsRate,
+          'aiReasoningEffort': state.aiReasoningEffort,
         }),
       ),
     );

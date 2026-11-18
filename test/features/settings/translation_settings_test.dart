@@ -25,11 +25,12 @@ void main() {
     hiveDir.deleteSync(recursive: true);
   });
 
-
   test('expanded subtitle sizes persist and keep legacy scales', () async {
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);
-    final LearningSettingsNotifier settings = container.read(learningSettingsProvider.notifier)..setFontSize('大');
+    final LearningSettingsNotifier settings = container.read(
+      learningSettingsProvider.notifier,
+    )..setFontSize('大');
     expect(container.read(learningSettingsProvider).fontScale, 1.18);
     settings
       ..setFontSize('最大')
@@ -340,7 +341,7 @@ void main() {
       final LearningSettingsState state = container.read(
         learningSettingsProvider,
       );
-      expect(asrProviderOptions, <String>['阿里云百炼', '腾讯云']);
+      expect(asrProviderOptions, <String>['阿里云百炼', '腾讯云', 'StepFun']);
       expect(asrProviderPresets.containsKey('OpenAI'), isFalse);
       expect(state.asrProvider, '阿里云百炼');
       expect(state.asrApiKey, isEmpty);

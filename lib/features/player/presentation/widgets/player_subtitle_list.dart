@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
 
 import '../../../patterns/presentation/pattern_analysis_dialog.dart';
+import '../../../patterns/presentation/widgets/line_pattern_note_chip.dart';
 import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
@@ -738,6 +739,13 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                             ),
                           ),
                         ],
+                        if (widget.episodeId != null &&
+                            widget.episodeId!.isNotEmpty)
+                          LinePatternNoteChip(
+                            episodeId: widget.episodeId!,
+                            lineIndex: originalIndex,
+                            sentence: line.english,
+                          ),
                         const _SelectableLineBreak(),
                       ],
                     ),
@@ -957,6 +965,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
             context,
             sentence: line.english,
             episodeId: widget.episodeId,
+            lineIndex: index,
           ),
         );
         return;

@@ -60,8 +60,10 @@ class LessonService {
           _endpoint(settings, 'chat/completions'),
           options: _options(settings),
           cancelToken: cancelToken,
-          data: <String, Object>{
+          data: <String, Object?>{
             'model': settings.translationModel,
+            if (settings.reasoningEffortParam != null)
+              'reasoning_effort': settings.reasoningEffortParam,
             'messages': <Map<String, String>>[
               <String, String>{'role': 'system', 'content': _lessonPrompt},
               <String, String>{

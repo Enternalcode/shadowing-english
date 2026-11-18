@@ -114,6 +114,8 @@ class PatternAiService {
       data: <String, dynamic>{
         'model': settings.translationModel,
         'temperature': 0.4,
+        if (settings.reasoningEffortParam != null)
+          'reasoning_effort': settings.reasoningEffortParam,
         'messages': <Map<String, String>>[
           <String, String>{'role': 'system', 'content': system},
           <String, String>{'role': 'user', 'content': user},

@@ -473,7 +473,7 @@ void main() {
           .widget<DropdownButton<String>>(asr)
           .items!
           .map((DropdownMenuItem<String> item) => item.value),
-      <String>['阿里云百炼', '腾讯云'],
+      <String>['阿里云百炼', '腾讯云', 'StepFun'],
     );
     expect(find.text('获取 ASR 模型'), findsNothing);
     expect(tester.takeException(), isNull);
@@ -531,7 +531,14 @@ Finder _translationProviderDropdown() {
       of: find.text('翻译来源'),
       matching: find.byType(SettingsGroupCard),
     ),
-    matching: find.byType(DropdownButton<String>),
+    matching: find.byWidgetPredicate(
+      (Widget widget) =>
+          widget is DropdownButton<String> &&
+          (widget.items?.any(
+                (DropdownMenuItem<String> item) => item.value == 'OpenRouter',
+              ) ??
+              false),
+    ),
   );
 }
 

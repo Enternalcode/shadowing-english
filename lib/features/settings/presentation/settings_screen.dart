@@ -378,6 +378,25 @@ class SettingsScreen extends ConsumerWidget {
                         .setTranslationModel(value);
                   },
                 ),
+                _SelectRow(
+                  title: 'AI 思考程度',
+                  description: '推理模型的思考深度，影响响应速度。自动=不发参数。',
+                  value: settings.aiReasoningEffort,
+                  options: aiReasoningEffortOptions,
+                  optionLabel: (String v) => switch (v) {
+                    'auto' => '自动（模型默认）',
+                    'low' => '低 · 快速响应',
+                    'medium' => '中 · 均衡',
+                    'high' => '高 · 深度推理',
+                    _ => v,
+                  },
+                  onChanged: (String? value) {
+                    if (value == null) return;
+                    ref
+                        .read(learningSettingsProvider.notifier)
+                        .setAiReasoningEffort(value);
+                  },
+                ),
               ],
               if (isGoogleTranslate)
                 SettingsInputRow(

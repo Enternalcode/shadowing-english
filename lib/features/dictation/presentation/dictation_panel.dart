@@ -7,6 +7,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../patterns/presentation/pattern_analysis_dialog.dart';
+import '../../patterns/presentation/widgets/line_pattern_note_chip.dart';
 import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
@@ -697,6 +698,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                       context,
                       sentence: _line.english,
                       episodeId: widget.episodeId,
+                      lineIndex: _index,
                       courseTitle: widget.course,
                     ),
                   ),
@@ -1008,6 +1010,13 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                             fontSize: 12,
                             color: AppDesignTokens.textSecondary,
                           ),
+                        ),
+                      if (!masked && widget.episodeId.isNotEmpty)
+                        LinePatternNoteChip(
+                          episodeId: widget.episodeId,
+                          lineIndex: i,
+                          sentence: line.english,
+                          courseTitle: widget.course,
                         ),
                     ],
                   ),

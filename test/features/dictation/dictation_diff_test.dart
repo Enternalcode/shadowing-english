@@ -110,7 +110,7 @@ void main() {
     expect(score.missedWords.length, 6);
   });
 
-  test('expanded form equals contraction (I am == I\'m)', () {
+  test("expanded form equals contraction (I am == I'm)", () {
     final DictationScore score = scoreDictation(
       "I'm with aitransito.",
       'I am with the aitransito',

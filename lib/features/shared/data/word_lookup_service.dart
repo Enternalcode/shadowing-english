@@ -179,6 +179,8 @@ class WordLookupService {
             data: <String, dynamic>{
               'model': settings.translationModel,
               'temperature': 0.1,
+              if (settings.reasoningEffortParam != null)
+                'reasoning_effort': settings.reasoningEffortParam,
               'messages': <Map<String, String>>[
                 <String, String>{
                   'role': 'system',
@@ -230,6 +232,8 @@ class WordLookupService {
       data: <String, dynamic>{
         'model': settings.translationModel,
         'temperature': 0.1,
+        if (settings.reasoningEffortParam != null)
+          'reasoning_effort': settings.reasoningEffortParam,
         // Prompt JSON rather than requiring response_format support on relays.
         'messages': <Map<String, String>>[
           <String, String>{
@@ -321,6 +325,8 @@ class WordLookupService {
       data: <String, dynamic>{
         'model': settings.translationModel,
         'temperature': 0.2,
+        if (settings.reasoningEffortParam != null)
+          'reasoning_effort': settings.reasoningEffortParam,
         'response_format': const <String, String>{'type': 'json_object'},
         'messages': <Map<String, String>>[
           <String, String>{

@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../settings/presentation/settings_provider.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
+import '../data/line_pattern_store.dart';
 import '../data/pattern_ai_service.dart';
 import '../data/pattern_book_provider.dart';
 import '../domain/sentence_pattern.dart';
+import 'widgets/pattern_example_tile.dart';
 
 /// "拆解句式" — dissects one subtitle line into a reusable spoken pattern.
 /// The card can be saved to the pattern book, and "再造几句" progressively
@@ -16,18 +18,21 @@ class PatternAnalysisDialog extends ConsumerStatefulWidget {
   const PatternAnalysisDialog({
     required this.sentence,
     this.episodeId,
+    this.lineIndex,
     this.courseTitle,
     super.key,
   });
 
   final String sentence;
   final String? episodeId;
+  final int? lineIndex;
   final String? courseTitle;
 
   static Future<void> show(
     BuildContext context, {
     required String sentence,
     String? episodeId,
+    int? lineIndex,
     String? courseTitle,
   }) {
     return showDialog<void>(
@@ -35,6 +40,7 @@ class PatternAnalysisDialog extends ConsumerStatefulWidget {
       builder: (_) => PatternAnalysisDialog(
         sentence: sentence,
         episodeId: episodeId,
+        lineIndex: lineIndex,
         courseTitle: courseTitle,
       ),
     );
@@ -53,10 +59,36 @@ class _PatternAnalysisDialogState extends ConsumerState<PatternAnalysisDialog> {
   bool _generating = false;
   String? _error;
 
+  String? get _lineKey => widget.episodeId == null || widget.lineIndex == null
+      ? null
+      : linePatternKey(widget.episodeId!, widget.lineIndex!);
+
   @override
   void initState() {
     super.initState();
-    unawaited(_analyze());
+    unawaited(_loadOrAnalyze());
+  }
+
+  /// Reuses the persisted note when this line was already dissected — reopen
+  /// is instant and free. Otherwise calls the AI and archives the result.
+  Future<void> _loadOrAnalyze() async {
+    final String? key = _lineKey;
+    if (key != null) {
+      final LinePatternNote? saved = await readLinePatternNote(key);
+      if (saved != null && mounted) {
+        setState(() {
+          _analysis = PatternAnalysis(
+            pattern: saved.pattern,
+            slots: saved.slots,
+            explanation: saved.explanation,
+          );
+          _pendingExamples.addAll(saved.examples);
+          _analyzing = false;
+        });
+        return;
+      }
+    }
+    if (mounted) await _analyze();
   }
 
   Future<void> _analyze() async {
@@ -72,6 +104,19 @@ class _PatternAnalysisDialogState extends ConsumerState<PatternAnalysisDialog> {
         _analysis = result;
         _analyzing = false;
       });
+      final String? key = _lineKey;
+      if (key != null) {
+        unawaited(
+          saveLinePatternNote(
+            key,
+            LinePatternNote(
+              pattern: result.pattern,
+              slots: result.slots,
+              explanation: result.explanation,
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -79,6 +124,17 @@ class _PatternAnalysisDialogState extends ConsumerState<PatternAnalysisDialog> {
         _analyzing = false;
       });
     }
+  }
+
+  /// Forces a fresh AI pass over the cached note.
+  void _reanalyze() {
+    setState(() {
+      _analyzing = true;
+      _analysis = null;
+      _pendingExamples.clear();
+      _error = null;
+    });
+    unawaited(_analyze());
   }
 
   void _save() {
@@ -124,6 +180,20 @@ class _PatternAnalysisDialogState extends ConsumerState<PatternAnalysisDialog> {
           if (have.add(e.toLowerCase())) _pendingExamples.add(e);
         }
         setState(() {});
+      }
+      final String? key = _lineKey;
+      if (key != null) {
+        unawaited(
+          saveLinePatternNote(
+            key,
+            LinePatternNote(
+              pattern: a.pattern,
+              slots: a.slots,
+              explanation: a.explanation,
+            ),
+            newExamples: fresh,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -275,6 +345,12 @@ class _PatternAnalysisDialogState extends ConsumerState<PatternAnalysisDialog> {
                   : const Icon(Icons.add_circle_outline_rounded, size: 16),
               label: Text(_generating ? '造句中…' : '再造几句（口语版）'),
             ),
+            if (_lineKey != null)
+              TextButton.icon(
+                onPressed: _generating ? null : _reanalyze,
+                icon: const Icon(Icons.refresh_rounded, size: 16),
+                label: const Text('重新拆解'),
+              ),
           ],
         ),
         if (examples.isNotEmpty) ...<Widget>[
@@ -287,25 +363,7 @@ class _PatternAnalysisDialogState extends ConsumerState<PatternAnalysisDialog> {
           for (int i = 0; i < examples.length; i += 1)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    '${i + 1}.',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppDesignTokens.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      examples[i],
-                      style: const TextStyle(fontSize: 13, height: 1.4),
-                    ),
-                  ),
-                ],
-              ),
+              child: PatternExampleTile(index: i + 1, sentence: examples[i]),
             ),
         ],
         if (_error != null) _ErrorText(_error!),
