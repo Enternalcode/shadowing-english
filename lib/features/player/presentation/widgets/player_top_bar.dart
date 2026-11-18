@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../shared/presentation/dictionary_search_dialog.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 
 class PlayerTopBar extends StatelessWidget {
@@ -169,6 +170,11 @@ class _PlayerTopStatus extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          IconButton(
+            onPressed: () => DictionarySearchDialog.show(context),
+            tooltip: '查词典',
+            icon: const Icon(Icons.search_rounded),
+          ),
           if (onTranscriptPressed != null)
             IconButton(
               onPressed: onTranscriptPressed,
@@ -220,6 +226,16 @@ class _PlayerTopStatus extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
+          IconButton(
+            onPressed: () => DictionarySearchDialog.show(context),
+            tooltip: '查词典',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(
+              Icons.search_rounded,
+              size: 22,
+              color: AppDesignTokens.brandGreenDark,
+            ),
+          ),
           if (onTranscriptPressed != null)
             TextButton.icon(
               onPressed: onTranscriptPressed,

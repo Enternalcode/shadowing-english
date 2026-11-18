@@ -30,6 +30,12 @@ void showWordLookupDialog(
           rawWord: cleaned,
           contextSentence: contextSentence ?? '',
           episodeId: episodeId,
+          // Bounded height enables the card's internal scroll — an
+          // unbounded card overflows the dialog on short windows.
+          maxHeight: (MediaQuery.sizeOf(context).height - 96).clamp(
+            240.0,
+            560.0,
+          ),
           onClose: () => Navigator.of(dialogContext).pop(),
         ),
       ),

@@ -17,6 +17,7 @@ import '../../player/presentation/player_subtitle_loader.dart';
 import '../../player/presentation/transcript_reader_session.dart';
 import '../../settings/presentation/settings_provider.dart';
 import '../../shared/data/word_lookup_service.dart';
+import '../../shared/presentation/dictionary_search_dialog.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_compact.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
@@ -761,6 +762,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                               ),
                               const SizedBox(width: 8),
                             ],
+                            OutlinedButton.icon(
+                              onPressed: editMode
+                                  ? null
+                                  : () => DictionarySearchDialog.show(context),
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 18,
+                                ),
+                              ),
+                              icon: const Icon(Icons.search_rounded, size: 18),
+                              label: const Text(
+                                '查词',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
                             OutlinedButton.icon(
                               onPressed: editMode
                                   ? null

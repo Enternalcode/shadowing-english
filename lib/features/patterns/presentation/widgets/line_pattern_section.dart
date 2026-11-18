@@ -349,7 +349,7 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
         if (note.examples.isNotEmpty) ...<Widget>[
           const SizedBox(height: 6),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 190),
+            constraints: const BoxConstraints(maxHeight: 230),
             child: ListView.builder(
               shrinkWrap: true,
               itemCount: note.examples.length,

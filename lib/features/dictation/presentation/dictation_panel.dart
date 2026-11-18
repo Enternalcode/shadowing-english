@@ -10,6 +10,7 @@ import '../../patterns/data/line_pattern_store.dart';
 import '../../patterns/presentation/widgets/line_pattern_section.dart';
 import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
+import '../../shared/presentation/dictionary_search_dialog.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/word_lookup_popup.dart';
 import '../../words/presentation/word_book_provider.dart';
@@ -709,6 +710,15 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                   icon: const Icon(Icons.schema_outlined),
                 ),
                 IconButton(
+                  tooltip: '查词典',
+                  onPressed: () => unawaited(
+                    DictionarySearchDialog.show(
+                      context,
+                    ).then((_) => _focusNode.requestFocus()),
+                  ),
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                IconButton(
                   tooltip: '音效音量',
                   onPressed: _showVolumeDialog,
                   icon: const Icon(Icons.tune_rounded),
@@ -737,7 +747,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             ),
             if (widget.episodeId.isNotEmpty)
               ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 240),
+                constraints: const BoxConstraints(maxHeight: 340),
                 child: SingleChildScrollView(
                   child: LinePatternSection(
                     episodeId: widget.episodeId,
