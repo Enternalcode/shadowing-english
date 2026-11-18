@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 
+import '../../settings/presentation/settings_provider.dart';
+import 'pattern_ai_service.dart';
+
 /// A sentence-pattern analysis attached to one subtitle line of one episode.
 /// Persisted so the dissection survives restarts and shows inline under the
 /// line instead of living only inside a transient dialog.
@@ -105,3 +108,105 @@ final linePatternProvider = StreamProvider.family<LinePatternNote?, String>((
     yield LinePatternNote.decode(box.get(key));
   }
 });
+
+/// Analysis-job state: which line keys are being dissected right now, and the
+/// last error per key. Centralized here so several mounted views of the same
+/// line (subtitle row, dictation panel) never trigger duplicate AI calls.
+typedef PatternJobs = ({Set<String> pending, Map<String, String> errors});
+
+class PatternAnalysisJobs extends Notifier<PatternJobs> {
+  @override
+  PatternJobs build() => (pending: <String>{}, errors: <String, String>{});
+
+  /// Dissects [sentence] into a reusable pattern and stores the note under
+  /// [key]. No-ops while the same key is in flight; a cached note short-
+  /// circuits unless [force] (re-analyze). Errors surface per key.
+  Future<void> request({
+    required String key,
+    required String sentence,
+    bool force = false,
+  }) async {
+    if (state.pending.contains(key)) return;
+    if (!force && (await readLinePatternNote(key)) != null) return;
+    state = (
+      pending: <String>{...state.pending, key},
+      errors: <String, String>{...state.errors}..remove(key),
+    );
+    try {
+      final PatternAnalysis result = await ref
+          .read(patternAiServiceProvider)
+          .analyze(
+            sentence: sentence,
+            settings: ref.read(learningSettingsProvider),
+          );
+      await saveLinePatternNote(
+        key,
+        LinePatternNote(
+          pattern: result.pattern,
+          slots: result.slots,
+          explanation: result.explanation,
+        ),
+      );
+    } catch (e) {
+      state = (
+        pending: state.pending,
+        errors: <String, String>{...state.errors, key: '$e'},
+      );
+    } finally {
+      state = (
+        pending: <String>{...state.pending}..remove(key),
+        errors: state.errors,
+      );
+    }
+  }
+
+  /// Generates more colloquial examples for the stored note; returns how many
+  /// were actually appended (dedupe may drop some).
+  Future<int> generateMore({
+    required String key,
+    required LinePatternNote note,
+    required String sourceSentence,
+    int count = 4,
+  }) async {
+    if (state.pending.contains(key)) return 0;
+    state = (
+      pending: <String>{...state.pending, key},
+      errors: <String, String>{...state.errors}..remove(key),
+    );
+    try {
+      final List<String> fresh = await ref
+          .read(patternAiServiceProvider)
+          .generateExamples(
+            pattern: note.pattern,
+            sourceSentence: sourceSentence,
+            settings: ref.read(learningSettingsProvider),
+            count: count,
+          );
+      final Set<String> seen = note.examples
+          .map((String e) => e.toLowerCase())
+          .toSet();
+      final List<String> added = fresh
+          .where((String e) => seen.add(e.toLowerCase()))
+          .toList(growable: false);
+      if (added.isNotEmpty) {
+        await saveLinePatternNote(key, note, newExamples: added);
+      }
+      return added.length;
+    } catch (e) {
+      state = (
+        pending: state.pending,
+        errors: <String, String>{...state.errors, key: '$e'},
+      );
+      return 0;
+    } finally {
+      state = (
+        pending: <String>{...state.pending}..remove(key),
+        errors: state.errors,
+      );
+    }
+  }
+}
+
+final NotifierProvider<PatternAnalysisJobs, PatternJobs>
+patternAnalysisJobsProvider =
+    NotifierProvider<PatternAnalysisJobs, PatternJobs>(PatternAnalysisJobs.new);

@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../patterns/presentation/pattern_analysis_dialog.dart';
-import '../../../patterns/presentation/widgets/line_pattern_note_chip.dart';
+import '../../../patterns/data/line_pattern_store.dart';
+import '../../../patterns/presentation/widgets/line_pattern_section.dart';
 import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
@@ -741,7 +742,7 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                         ],
                         if (widget.episodeId != null &&
                             widget.episodeId!.isNotEmpty)
-                          LinePatternNoteChip(
+                          LinePatternSection(
                             episodeId: widget.episodeId!,
                             lineIndex: originalIndex,
                             sentence: line.english,
@@ -960,13 +961,15 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
         widget.onAiExplain(index);
         return;
       case 'pattern':
+        final String? episodeId = widget.episodeId;
+        if (episodeId == null || episodeId.isEmpty) return;
         unawaited(
-          PatternAnalysisDialog.show(
-            context,
-            sentence: line.english,
-            episodeId: widget.episodeId,
-            lineIndex: index,
-          ),
+          ProviderScope.containerOf(context)
+              .read(patternAnalysisJobsProvider.notifier)
+              .request(
+                key: linePatternKey(episodeId, index),
+                sentence: line.english,
+              ),
         );
         return;
       case 'regenerate-ai-line':

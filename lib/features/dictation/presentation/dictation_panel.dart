@@ -6,8 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 
-import '../../patterns/presentation/pattern_analysis_dialog.dart';
-import '../../patterns/presentation/widgets/line_pattern_note_chip.dart';
+import '../../patterns/data/line_pattern_store.dart';
+import '../../patterns/presentation/widgets/line_pattern_section.dart';
 import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
@@ -693,15 +693,16 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                 ),
                 IconButton(
                   tooltip: '拆解本句句式',
-                  onPressed: () => unawaited(
-                    PatternAnalysisDialog.show(
-                      context,
-                      sentence: _line.english,
-                      episodeId: widget.episodeId,
-                      lineIndex: _index,
-                      courseTitle: widget.course,
-                    ),
-                  ),
+                  onPressed: widget.episodeId.isEmpty
+                      ? null
+                      : () => unawaited(
+                          ref
+                              .read(patternAnalysisJobsProvider.notifier)
+                              .request(
+                                key: linePatternKey(widget.episodeId, _index),
+                                sentence: _line.english,
+                              ),
+                        ),
                   icon: const Icon(Icons.schema_outlined),
                 ),
                 IconButton(
@@ -731,6 +732,14 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             Expanded(
               child: _showSubtitles ? _buildPeekList() : _buildBlindArea(),
             ),
+            if (widget.episodeId.isNotEmpty)
+              LinePatternSection(
+                episodeId: widget.episodeId,
+                lineIndex: _index,
+                sentence: _line.english,
+                courseTitle: widget.course,
+                maskTitle: !_checked && !_revealed.contains(_index),
+              ),
             const SizedBox(height: 8),
             if (_score != null && _checked) ...<Widget>[
               _ScoreHeader(score: _score!, delta: _lastDelta, streak: _streak),
@@ -1012,7 +1021,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                           ),
                         ),
                       if (!masked && widget.episodeId.isNotEmpty)
-                        LinePatternNoteChip(
+                        LinePatternSection(
                           episodeId: widget.episodeId,
                           lineIndex: i,
                           sentence: line.english,
