@@ -733,12 +733,17 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               child: _showSubtitles ? _buildPeekList() : _buildBlindArea(),
             ),
             if (widget.episodeId.isNotEmpty)
-              LinePatternSection(
-                episodeId: widget.episodeId,
-                lineIndex: _index,
-                sentence: _line.english,
-                courseTitle: widget.course,
-                maskTitle: !_checked && !_revealed.contains(_index),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 240),
+                child: SingleChildScrollView(
+                  child: LinePatternSection(
+                    episodeId: widget.episodeId,
+                    lineIndex: _index,
+                    sentence: _line.english,
+                    courseTitle: widget.course,
+                    maskTitle: !_checked && !_revealed.contains(_index),
+                  ),
+                ),
               ),
             const SizedBox(height: 8),
             if (_score != null && _checked) ...<Widget>[
