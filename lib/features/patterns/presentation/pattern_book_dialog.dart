@@ -299,6 +299,18 @@ class _PatternCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 12, height: 1.5),
               ),
             ),
+          if (item.grammar.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                '语法：${item.grammar}',
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  height: 1.45,
+                  color: AppDesignTokens.textSecondary,
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text(
@@ -322,6 +334,7 @@ class _PatternCard extends StatelessWidget {
                       child: PatternExampleTile(
                         index: i + 1,
                         sentence: item.examples[i],
+                        episodeId: item.episodeId,
                       ),
                     ),
                     InkWell(

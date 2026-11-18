@@ -41,6 +41,7 @@ class PatternBookNotifier extends Notifier<List<SentencePattern>> {
     String? episodeId,
     String? courseTitle,
     String slots = '',
+    String grammar = '',
     List<String> examples = const <String>[],
   }) {
     final String normalized = pattern.trim().toLowerCase();
@@ -58,6 +59,7 @@ class PatternBookNotifier extends Notifier<List<SentencePattern>> {
       episodeId: episodeId,
       courseTitle: courseTitle,
       slots: slots.trim(),
+      grammar: grammar.trim(),
       examples: _dedupe(examples),
       createdAt: DateTime.now().toIso8601String(),
     );

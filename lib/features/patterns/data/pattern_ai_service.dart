@@ -14,11 +14,13 @@ class PatternAnalysis {
     required this.pattern,
     required this.slots,
     required this.explanation,
+    this.grammar = '',
   });
 
   final String pattern;
   final String slots;
   final String explanation;
+  final String grammar;
 }
 
 /// Calls the configured OpenAI-compatible chat endpoint (the translation
@@ -57,9 +59,14 @@ class PatternAiService {
           'colloquial sentence pattern. Replace the variable parts with slot '
           'markers like sb, sth, doing sth, adj, a place. Return strict JSON: '
           '{"pattern":"accuse sb of doing sth","slots":"sb=the man; doing '
-          'sth=taking his parking spot","explanationCn":"用法说明"}. '
+          'sth=taking his parking spot","explanationCn":"用法说明", '
+          '"grammarCn":"语法点"}. '
           'explanationCn is one or two short Chinese sentences about when '
-          'to use the pattern and how to fill the slots.',
+          'to use the pattern and how to fill the slots. grammarCn is one '
+          'or two short Chinese sentences naming the grammar of THIS '
+          'sentence — tense/aspect/voice first, then one key structure '
+          '(e.g. "一般现在时；for doing sth 中 doing 是介词 for 的宾语， '
+          'a adj noun 作同位语"), never generic filler.',
       user: 'Sentence: "$sentence"',
     );
     return parseAnalysis(decoded, sourceSentence: sentence);
@@ -153,6 +160,7 @@ class PatternAiService {
       pattern: pattern,
       slots: (decoded['slots'] as String? ?? '').trim(),
       explanation: (decoded['explanationCn'] as String? ?? '').trim(),
+      grammar: (decoded['grammarCn'] as String? ?? '').trim(),
     );
   }
 

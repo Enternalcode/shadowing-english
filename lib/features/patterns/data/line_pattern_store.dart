@@ -14,18 +14,21 @@ class LinePatternNote {
     required this.pattern,
     required this.slots,
     required this.explanation,
+    this.grammar = '',
     this.examples = const <String>[],
   });
 
   final String pattern;
   final String slots;
   final String explanation;
+  final String grammar;
   final List<String> examples;
 
   String encode() => jsonEncode(<String, Object?>{
     'pattern': pattern,
     'slots': slots,
     'explanation': explanation,
+    'grammar': grammar,
     'examples': examples,
   });
 
@@ -39,6 +42,7 @@ class LinePatternNote {
         pattern: pattern,
         slots: (json['slots'] as String? ?? '').trim(),
         explanation: (json['explanation'] as String? ?? '').trim(),
+        grammar: (json['grammar'] as String? ?? '').trim(),
         examples: (json['examples'] as List<dynamic>? ?? const <dynamic>[])
             .whereType<String>()
             .toList(growable: false),
@@ -52,6 +56,7 @@ class LinePatternNote {
     pattern: pattern,
     slots: slots,
     explanation: explanation,
+    grammar: grammar,
     examples: merged,
   );
 }
@@ -145,6 +150,7 @@ class PatternAnalysisJobs extends Notifier<PatternJobs> {
           pattern: result.pattern,
           slots: result.slots,
           explanation: result.explanation,
+          grammar: result.grammar,
         ),
       );
     } catch (e) {

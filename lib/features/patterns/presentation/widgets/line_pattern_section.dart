@@ -59,6 +59,7 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
           episodeId: widget.episodeId,
           courseTitle: widget.courseTitle,
           slots: note.slots,
+          grammar: note.grammar,
           examples: note.examples,
         );
   }
@@ -227,6 +228,28 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
             style: const TextStyle(fontSize: 12.5, height: 1.5),
           ),
         ],
+        if (note.grammar.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 5),
+          RichText(
+            text: TextSpan(
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: AppDesignTokens.textSecondary,
+              ),
+              children: <TextSpan>[
+                const TextSpan(
+                  text: '语法：',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF7C5E10),
+                  ),
+                ),
+                TextSpan(text: note.grammar),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         Wrap(
           spacing: 6,
@@ -306,6 +329,7 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
                 child: PatternExampleTile(
                   index: i + 1,
                   sentence: note.examples[i],
+                  episodeId: widget.episodeId,
                 ),
               ),
             ),

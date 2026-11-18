@@ -10,6 +10,7 @@ class SentencePattern {
     this.episodeId,
     this.courseTitle,
     this.slots = '',
+    this.grammar = '',
     this.examples = const <String>[],
     required this.createdAt,
   });
@@ -23,6 +24,7 @@ class SentencePattern {
       episodeId: json['episodeId'] as String?,
       courseTitle: json['courseTitle'] as String?,
       slots: json['slots'] as String? ?? '',
+      grammar: json['grammar'] as String? ?? '',
       examples: (json['examples'] as List<Object?>? ?? const <Object?>[])
           .whereType<String>()
           .toList(growable: false),
@@ -37,6 +39,7 @@ class SentencePattern {
   final String? episodeId;
   final String? courseTitle;
   final String slots;
+  final String grammar;
   final List<String> examples;
   final String createdAt;
 
@@ -48,6 +51,7 @@ class SentencePattern {
     'episodeId': episodeId,
     'courseTitle': courseTitle,
     'slots': slots,
+    'grammar': grammar,
     'examples': examples,
     'createdAt': createdAt,
   };
@@ -56,6 +60,7 @@ class SentencePattern {
     String? pattern,
     String? explanation,
     String? slots,
+    String? grammar,
     List<String>? examples,
   }) {
     return SentencePattern(
@@ -66,6 +71,7 @@ class SentencePattern {
       episodeId: episodeId,
       courseTitle: courseTitle,
       slots: slots ?? this.slots,
+      grammar: grammar ?? this.grammar,
       examples: examples ?? this.examples,
       createdAt: createdAt,
     );

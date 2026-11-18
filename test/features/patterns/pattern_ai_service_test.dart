@@ -6,7 +6,8 @@ void main() {
     test('parses a fenced analysis response', () {
       final Map<String, Object?> decoded = PatternAiService.decodeChatJson(
         '```json\n{"pattern":"accuse sb of doing sth", "slots":"sb=the man; '
-        'doing sth=taking his spot", "explanationCn":"指控某人做了某事"}\n```',
+        'doing sth=taking his spot", "explanationCn":"指控某人做了某事", '
+        '"grammarCn":"一般过去时；accuse sb of doing sth 中 doing 是动名词"}\n```',
       );
       final PatternAnalysis a = PatternAiService.parseAnalysis(
         decoded,
@@ -15,6 +16,15 @@ void main() {
       expect(a.pattern, 'accuse sb of doing sth');
       expect(a.slots, contains('the man'));
       expect(a.explanation, contains('指控'));
+      expect(a.grammar, contains('一般过去时'));
+    });
+
+    test('grammar defaults to empty for older responses', () {
+      final PatternAnalysis a = PatternAiService.parseAnalysis(
+        const <String, Object?>{'pattern': 'do sth'},
+        sourceSentence: 'x',
+      );
+      expect(a.grammar, isEmpty);
     });
 
     test('parseAnalysis throws when pattern missing', () {
