@@ -161,7 +161,6 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
 
   void _openWordLookup(String token) => showWordLookupDialog(
     context,
-    ref,
     word: token,
     contextSentence: widget.sentence,
     episodeId: widget.episodeId,

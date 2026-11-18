@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/presentation/dictionary_search_dialog.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
+import '../../../shared/presentation/tappable_word_text.dart';
 
 class PlayerTopBar extends StatelessWidget {
   const PlayerTopBar({
@@ -226,16 +227,7 @@ class _PlayerTopStatus extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          IconButton(
-            onPressed: () => DictionarySearchDialog.show(context),
-            tooltip: '查词典',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(
-              Icons.search_rounded,
-              size: 22,
-              color: AppDesignTokens.brandGreenDark,
-            ),
-          ),
+          const _DictSearchField(),
           if (onTranscriptPressed != null)
             TextButton.icon(
               onPressed: onTranscriptPressed,
@@ -270,6 +262,84 @@ class _PlayerTopStatus extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Compact inline dictionary lookup living in the top bar — type a word,
+/// hit Enter, the shared dictionary card opens. No intermediate dialog.
+class _DictSearchField extends StatefulWidget {
+  const _DictSearchField();
+
+  @override
+  State<_DictSearchField> createState() => _DictSearchFieldState();
+}
+
+class _DictSearchFieldState extends State<_DictSearchField> {
+  final TextEditingController _controller = TextEditingController();
+
+  void _submit() {
+    final String word = _controller.text.trim().replaceAll(
+      RegExp(r"^[^\w'-]+|[^\w'-]+$"),
+      '',
+    );
+    if (word.isEmpty) return;
+    _controller.clear();
+    showWordLookupDialog(context, word: word);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 132,
+      height: 34,
+      child: TextField(
+        controller: _controller,
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) => _submit(),
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(
+          hintText: '查词',
+          hintStyle: const TextStyle(
+            fontSize: 13,
+            color: AppDesignTokens.textSecondary,
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: AppDesignTokens.appWhite,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 28,
+            minHeight: 28,
+          ),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 16,
+            color: AppDesignTokens.textSecondary,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: const BorderSide(color: AppDesignTokens.borderGray),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: const BorderSide(color: AppDesignTokens.borderGray),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: const BorderSide(
+              color: AppDesignTokens.brandGreen,
+              width: 1.5,
+            ),
+          ),
+        ),
       ),
     );
   }

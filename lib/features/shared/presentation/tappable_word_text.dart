@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'pad/app_design_tokens.dart';
 import 'word_lookup_popup.dart';
@@ -8,8 +7,7 @@ import 'word_lookup_popup.dart';
 /// image, real-voice pronunciation, collect. [contextSentence] gives the
 /// lookup service the surrounding line for a better context meaning.
 void showWordLookupDialog(
-  BuildContext context,
-  WidgetRef ref, {
+  BuildContext context, {
   required String word,
   String? contextSentence,
   String? episodeId,

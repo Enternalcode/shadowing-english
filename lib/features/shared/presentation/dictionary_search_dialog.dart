@@ -111,27 +111,10 @@ class _DictionarySearchDialogState extends State<DictionarySearchDialog> {
               ],
             ),
           ),
-          const SizedBox(height: 10),
+          if (_word != null) const SizedBox(height: 10),
           Flexible(
             child: _word == null
-                ? Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppDesignTokens.appWhite.withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Text(
-                      '和字幕点词共用同一套词典：离线 ECDICT 释义 + 词图例句 + 真人发音，可查短语与生词收藏。',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.5,
-                        color: AppDesignTokens.textSecondary,
-                      ),
-                    ),
-                  )
+                ? const SizedBox.shrink()
                 : WordLookupPopupCard(
                     key: ValueKey<String>(_word!),
                     rawWord: _word!,

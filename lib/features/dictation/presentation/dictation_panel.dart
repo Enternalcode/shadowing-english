@@ -12,6 +12,7 @@ import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/dictionary_search_dialog.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
+import '../../shared/presentation/tappable_word_text.dart';
 import '../../shared/presentation/word_lookup_popup.dart';
 import '../../words/presentation/word_book_provider.dart';
 import '../data/dictation_stats_store.dart';
@@ -490,7 +491,9 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
 
   /// Tap a hidden word slot → dictionary card for that word, same lookup
   /// surface as tapping a word in the subtitle list.
-  void _showWordLookup(String word) {
+  void _showWordLookup(String rawWord) {
+    final String word = rawWord.replaceAll(RegExp(r"^[^\w'-]+|[^\w'-]+$"), '');
+    if (word.isEmpty) return;
     final DictationLine line = _line;
     unawaited(
       showDialog<void>(
@@ -846,8 +849,9 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                _line.english,
+              TappableWordText(
+                text: _line.english,
+                onWordTap: _showWordLookup,
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
@@ -1022,8 +1026,9 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                           showLetters: _hintLetters,
                         )
                       else
-                        Text(
-                          line.english,
+                        TappableWordText(
+                          text: line.english,
+                          onWordTap: _showWordLookup,
                           style: TextStyle(
                             fontWeight: active
                                 ? FontWeight.w800
