@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../../patterns/presentation/pattern_analysis_dialog.dart';
 import '../../phrases/presentation/phrase_book_provider.dart';
 import '../../shared/data/word_pronunciation_service.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
@@ -688,6 +689,18 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                       ? () => _openPos(_pos + 1)
                       : null,
                   icon: const Icon(Icons.skip_next_rounded),
+                ),
+                IconButton(
+                  tooltip: '拆解本句句式',
+                  onPressed: () => unawaited(
+                    PatternAnalysisDialog.show(
+                      context,
+                      sentence: _line.english,
+                      episodeId: widget.episodeId,
+                      courseTitle: widget.course,
+                    ),
+                  ),
+                  icon: const Icon(Icons.schema_outlined),
                 ),
                 IconButton(
                   tooltip: '音效音量',

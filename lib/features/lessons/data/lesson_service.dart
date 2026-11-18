@@ -16,6 +16,7 @@ bool canGenerateLesson(LearningSettingsState settings) =>
       'OpenRouter',
       'SiliconFlow',
       'DeepSeek',
+      'StepFun',
     }.contains(settings.translationProvider) &&
     settings.translationApiKey.trim().isNotEmpty &&
     settings.translationModel.trim().isNotEmpty &&
