@@ -184,6 +184,7 @@ class LearningSettingsState {
     required this.ttsVoice,
     required this.ttsRate,
     this.aiReasoningEffort = 'low',
+    this.aiVisionModel = '',
   });
 
   factory LearningSettingsState.defaults() {
@@ -259,6 +260,14 @@ class LearningSettingsState {
   String? get reasoningEffortParam =>
       aiReasoningEffort == 'auto' ? null : aiReasoningEffort;
 
+  /// Optional vision-capable model for image features (picture-book
+  /// narration). Empty means "fall back to translationModel".
+  final String aiVisionModel;
+
+  /// Model name to send when a feature needs vision input.
+  String get effectiveVisionModel =>
+      aiVisionModel.trim().isEmpty ? translationModel : aiVisionModel.trim();
+
   LearningSettingsState copyWith({
     String? subtitleMode,
     String? subtitleLetterCase,
@@ -288,6 +297,7 @@ class LearningSettingsState {
     String? ttsVoice,
     double? ttsRate,
     String? aiReasoningEffort,
+    String? aiVisionModel,
   }) {
     return LearningSettingsState(
       subtitleMode: subtitleMode ?? this.subtitleMode,
@@ -325,6 +335,7 @@ class LearningSettingsState {
       ttsVoice: ttsVoice ?? this.ttsVoice,
       ttsRate: ttsRate ?? this.ttsRate,
       aiReasoningEffort: aiReasoningEffort ?? this.aiReasoningEffort,
+      aiVisionModel: aiVisionModel ?? this.aiVisionModel,
     );
   }
 
@@ -463,6 +474,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
             aiReasoningEffortOptions.contains(json['aiReasoningEffort'])
             ? json['aiReasoningEffort'] as String
             : null,
+        aiVisionModel: _stringOrNull(json['aiVisionModel']),
       );
     } catch (_) {
       return defaults;
@@ -688,6 +700,11 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
     _persist();
   }
 
+  void setAiVisionModel(String value) {
+    state = state.copyWith(aiVisionModel: value.trim());
+    _persist();
+  }
+
   void resetToDefaults() {
     state = LearningSettingsState.defaults();
     _persist();
@@ -728,6 +745,7 @@ class LearningSettingsNotifier extends Notifier<LearningSettingsState> {
           'ttsVoice': state.ttsVoice,
           'ttsRate': state.ttsRate,
           'aiReasoningEffort': state.aiReasoningEffort,
+          'aiVisionModel': state.aiVisionModel,
         }),
       ),
     );

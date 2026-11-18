@@ -71,22 +71,27 @@ Future<PackagedTextLesson> packageTextLesson({
     await File(imagePath).copy(coverPath);
   }
 
-  final String mp4Path = '${outDir.path}${Platform.pathSeparator}$baseName.mp4';
-  await _renderVideo(
+  String videoPath = '${outDir.path}${Platform.pathSeparator}$baseName.mp4';
+  final bool rendered = await _renderVideo(
     wavPath: fullWav.path,
-    mp4Path: mp4Path,
+    mp4Path: videoPath,
     imagePath: coverPath,
   );
+  if (!rendered) {
+    // No ffmpeg on this platform (Android): the concatenated wav still
+    // plays as the episode's media track, subtitles included.
+    videoPath = fullWav.path;
+  }
 
   return PackagedTextLesson(
-    videoPath: mp4Path,
+    videoPath: videoPath,
     subtitlePath: srtFile.path,
     sentenceCount: clips.length,
     totalSeconds: cursorMs / 1000,
   );
 }
 
-Future<void> _renderVideo({
+Future<bool> _renderVideo({
   required String wavPath,
   required String mp4Path,
   String? imagePath,
@@ -156,14 +161,15 @@ Future<void> _renderVideo({
   for (final String exe in candidates) {
     try {
       final ProcessResult r = await Process.run(exe, args);
-      if (r.exitCode == 0) return;
+      if (r.exitCode == 0) return true;
       lastError = '${r.stderr}'.trim();
       break; // ffmpeg ran but failed — retrying another binary won't help
     } on ProcessException {
       lastError = '$exe 不在 PATH';
     }
   }
-  throw StateError('ffmpeg 渲染失败: $lastError');
+  stderr.writeln('ffmpeg 渲染失败: $lastError');
+  return false;
 }
 
 String _srtTs(int ms) {

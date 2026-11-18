@@ -20,7 +20,7 @@ void main() {
       buildSignature: '',
     );
     const String downloadRoot =
-        'https://github.com/TideSparrow/shadowing-english/releases/download/v0.2.5';
+        'https://github.com/Enternalcode/shadowing-english/releases/download/v0.2.5';
     const Map<TargetPlatform, String> suffixes = <TargetPlatform, String>{
       TargetPlatform.android: 'android.apk',
       TargetPlatform.linux: 'linux-x64.tar.gz',
@@ -35,7 +35,7 @@ void main() {
           expect(options.uri.host, 'api.github.com');
           expect(
             options.uri.path,
-            '/repos/TideSparrow/shadowing-english/releases',
+            '/repos/Enternalcode/shadowing-english/releases',
           );
           handler.resolve(
             Response<List<dynamic>>(

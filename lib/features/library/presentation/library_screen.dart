@@ -22,6 +22,7 @@ import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_compact.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
 import '../../shared/presentation/pad/pad_top_bar.dart';
+import '../../story/presentation/story_book_dialog.dart';
 import '../../text_import/presentation/text_import_dialog.dart';
 import '../../words/data/offline_word_dictionary.dart';
 import 'library_catalog_provider.dart';
@@ -716,144 +717,217 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                               ),
                             ),
                             const SizedBox(width: 14),
-                            _CourseViewModeToggle(
-                              value: viewMode,
-                              onChanged: (LibraryCourseViewMode nextValue) {
-                                setState(() {
-                                  viewMode = nextValue;
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 12),
-                            if (editMode)
-                              _LibraryEditToolbar(
-                                selectedCount: selectedCourseIds.length,
-                                onEdit: selectedCourseIds.isEmpty
-                                    ? null
-                                    : _showBatchEditDialog,
-                                onDelete: selectedCourseIds.isEmpty
-                                    ? null
-                                    : _confirmDeleteSelectedCourses,
-                                onDone: _exitEditMode,
-                              )
-                            else ...<Widget>[
-                              FilledButton.tonal(
-                                onPressed: filteredCourses.isEmpty
-                                    ? null
-                                    : _enterEditMode,
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppDesignTokens.appWhite
-                                      .withValues(alpha: 0.92),
-                                  foregroundColor:
-                                      AppDesignTokens.primaryBlueDark,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 18,
-                                  ),
-                                  elevation: 0,
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: <Widget>[
+                                    _CourseViewModeToggle(
+                                      value: viewMode,
+                                      onChanged:
+                                          (LibraryCourseViewMode nextValue) {
+                                            setState(() {
+                                              viewMode = nextValue;
+                                            });
+                                          },
+                                    ),
+                                    const SizedBox(width: 12),
+                                    if (editMode)
+                                      _LibraryEditToolbar(
+                                        selectedCount: selectedCourseIds.length,
+                                        onEdit: selectedCourseIds.isEmpty
+                                            ? null
+                                            : _showBatchEditDialog,
+                                        onDelete: selectedCourseIds.isEmpty
+                                            ? null
+                                            : _confirmDeleteSelectedCourses,
+                                        onDone: _exitEditMode,
+                                      )
+                                    else ...<Widget>[
+                                      FilledButton.tonal(
+                                        onPressed: filteredCourses.isEmpty
+                                            ? null
+                                            : _enterEditMode,
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: AppDesignTokens
+                                              .appWhite
+                                              .withValues(alpha: 0.92),
+                                          foregroundColor:
+                                              AppDesignTokens.primaryBlueDark,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 18,
+                                            vertical: 18,
+                                          ),
+                                          elevation: 0,
+                                        ),
+                                        child: const Text(
+                                          '编辑',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
+                                    OutlinedButton.icon(
+                                      onPressed: editMode
+                                          ? null
+                                          : () => DictionarySearchDialog.show(
+                                              context,
+                                            ),
+                                      style: OutlinedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 18,
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.search_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        '查词',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    OutlinedButton.icon(
+                                      onPressed: editMode
+                                          ? null
+                                          : () =>
+                                                PatternBookDialog.show(context),
+                                      style: OutlinedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 18,
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.menu_book_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        '句式库',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    OutlinedButton.icon(
+                                      onPressed: editMode
+                                          ? null
+                                          : () => StoryBookDialog.show(context),
+                                      style: OutlinedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 18,
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.auto_stories_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        '绘本带读',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    OutlinedButton.icon(
+                                      onPressed: editMode
+                                          ? null
+                                          : () =>
+                                                TextImportDialog.show(context),
+                                      style: OutlinedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 18,
+                                          vertical: 18,
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                        Icons.edit_note_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text(
+                                        '文本录入',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    FilledButton.icon(
+                                      onPressed: editMode
+                                          ? null
+                                          : () {
+                                              openImportCourseExperience(
+                                                context,
+                                              );
+                                            },
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor:
+                                            AppDesignTokens.brandGreen,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 18,
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                      icon: const DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          boxShadow:
+                                              AppDesignTokens.toyButtonShadow,
+                                        ),
+                                        child: Icon(
+                                          Icons.add_rounded,
+                                          size: 18,
+                                        ),
+                                      ),
+                                      label: const Text(
+                                        '导入新课程',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: const Text(
-                                  '编辑',
-                                  style: TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            OutlinedButton.icon(
-                              onPressed: editMode
-                                  ? null
-                                  : () => DictionarySearchDialog.show(context),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 18,
-                                ),
-                              ),
-                              icon: const Icon(Icons.search_rounded, size: 18),
-                              label: const Text(
-                                '查词',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            OutlinedButton.icon(
-                              onPressed: editMode
-                                  ? null
-                                  : () => PatternBookDialog.show(context),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 18,
-                                ),
-                              ),
-                              icon: const Icon(
-                                Icons.menu_book_rounded,
-                                size: 18,
-                              ),
-                              label: const Text(
-                                '句式库',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            OutlinedButton.icon(
-                              onPressed: editMode
-                                  ? null
-                                  : () => TextImportDialog.show(context),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 18,
-                                ),
-                              ),
-                              icon: const Icon(
-                                Icons.edit_note_rounded,
-                                size: 18,
-                              ),
-                              label: const Text(
-                                '文本录入',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            FilledButton.icon(
-                              onPressed: editMode
-                                  ? null
-                                  : () {
-                                      openImportCourseExperience(context);
-                                    },
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppDesignTokens.brandGreen,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 18,
-                                ),
-                                elevation: 0,
-                              ),
-                              icon: const DecoratedBox(
-                                decoration: BoxDecoration(
-                                  boxShadow: AppDesignTokens.toyButtonShadow,
-                                ),
-                                child: Icon(Icons.add_rounded, size: 18),
-                              ),
-                              label: const Text(
-                                '导入新课程',
-                                style: TextStyle(fontWeight: FontWeight.w900),
                               ),
                             ),
                           ],

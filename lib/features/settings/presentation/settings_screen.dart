@@ -397,6 +397,17 @@ class SettingsScreen extends ConsumerWidget {
                         .setAiReasoningEffort(value);
                   },
                 ),
+                SettingsInputRow(
+                  title: 'AI 视觉模型',
+                  description: '绘本带读等看图功能用的模型；留空则沿用上面的 Model。',
+                  value: settings.aiVisionModel,
+                  hintText: 'step-1v-8k / step-5-preview',
+                  onChanged: (String value) {
+                    ref
+                        .read(learningSettingsProvider.notifier)
+                        .setAiVisionModel(value);
+                  },
+                ),
               ],
               if (isGoogleTranslate)
                 SettingsInputRow(
