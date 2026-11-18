@@ -14,7 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../import_course/domain/import_match.dart';
 import '../../library/presentation/library_catalog_provider.dart';
 import '../../shared/presentation/pad/app_design_tokens.dart';
-import '../data/stepfun_realtime_tts.dart';
+import '../data/lesson_from_text_generator.dart';
 import '../data/text_lesson_packager.dart';
 import '../domain/sentence_splitter.dart';
 
@@ -190,42 +190,9 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
       _progress = '连接 StepFun realtime…';
     });
 
-    final StepfunRealtimeTts tts = StepfunRealtimeTts(
-      apiKey: key,
-      voice: _voice,
-    );
-    final List<({String text, Uint8List wav})> clips =
-        <({String text, Uint8List wav})>[];
-    final List<String> failed = <String>[];
     try {
-      for (int i = 0; i < sentences.length; i++) {
-        final String s = sentences[i];
-        setState(() => _progress = '合成 ${i + 1}/${sentences.length}：$s');
-        Uint8List? wav;
-        String lastErr = '';
-        for (int attempt = 0; attempt < 3 && wav == null; attempt++) {
-          try {
-            wav = await tts.synthesize(s);
-          } catch (e) {
-            lastErr = '$e'.replaceAll('\n', ' ');
-            await Future<void>.delayed(const Duration(milliseconds: 800));
-          }
-        }
-        if (wav == null) {
-          failed.add('${i + 1}. $s — $lastErr');
-        } else {
-          clips.add((text: s, wav: wav));
-        }
-      }
-      if (clips.isEmpty) {
-        throw StateError(
-          '全部句子合成失败${failed.isNotEmpty ? '：${failed.first}' : ''}',
-        );
-      }
-
-      setState(() => _progress = 'ffmpeg 打包视频…');
       final Directory support = await getApplicationSupportDirectory();
-      final String slug = _slug(
+      final String slug = slugifyLessonName(
         _titleCtrl.text.trim().isEmpty ? 'text_lesson' : _titleCtrl.text,
       );
       final Directory outDir = Directory(
@@ -233,12 +200,18 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
         '${Platform.pathSeparator}text_lessons'
         '${Platform.pathSeparator}${slug}_${DateTime.now().millisecondsSinceEpoch % 100000}',
       );
-      final PackagedTextLesson pkg = await packageTextLesson(
-        outDir: outDir,
-        baseName: slug,
-        clips: clips,
-        imagePath: _imagePath,
-      );
+      final LessonGenerationResult generated =
+          await generateLessonFromSentences(
+            sentences: sentences,
+            apiKey: key,
+            voice: _voice,
+            outDir: outDir,
+            baseName: slug,
+            imagePath: _imagePath,
+            onStep: (String step) => setState(() => _progress = step),
+          );
+      final PackagedTextLesson pkg = generated.pkg;
+      final List<String> failed = generated.failed;
 
       final ImportMatchRow row = ImportMatchRow(
         episodeName: _titleCtrl.text.trim().isEmpty
@@ -273,24 +246,16 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
       }
       setState(() {
         _doneMessage =
-            '已生成 ${clips.length}/${sentences.length} 句（${pkg.totalSeconds.toStringAsFixed(0)}s）'
+            '已生成 ${generated.clipCount}/${generated.totalCount} 句 '
+            '（${pkg.totalSeconds.toStringAsFixed(0)}s）'
             '${failed.isEmpty ? '' : '，${failed.length} 句失败'}';
         _progress = '';
       });
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
-      await tts.dispose();
       if (mounted) setState(() => _generating = false);
     }
-  }
-
-  static String _slug(String s) {
-    final String t = s
-        .toLowerCase()
-        .replaceAll(RegExp('[^a-z0-9]+'), '_')
-        .replaceAll(RegExp(r'^_+|_+$'), '');
-    return t.isEmpty ? 'text_lesson' : t;
   }
 
   @override

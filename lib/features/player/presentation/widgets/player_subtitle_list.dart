@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
 
+import '../../../patterns/presentation/pattern_analysis_dialog.dart';
 import '../../../shared/domain/subtitle_letter_case.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
 import '../../../shared/presentation/word_lookup_popup.dart';
@@ -876,6 +879,12 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                   title: const Text('精讲这句'),
                   onTap: () => Navigator.of(context).pop('ai-explain'),
                 ),
+                ListTile(
+                  leading: const Icon(Icons.schema_outlined),
+                  title: const Text('拆解句式'),
+                  subtitle: const Text('提取可套用的口语句式，可收藏造句'),
+                  onTap: () => Navigator.of(context).pop('pattern'),
+                ),
                 if (widget.onRegenerateAiLine != null)
                   ListTile(
                     leading: const Icon(Icons.refresh_rounded),
@@ -941,6 +950,15 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
         return;
       case 'ai-explain':
         widget.onAiExplain(index);
+        return;
+      case 'pattern':
+        unawaited(
+          PatternAnalysisDialog.show(
+            context,
+            sentence: line.english,
+            episodeId: widget.episodeId,
+          ),
+        );
         return;
       case 'regenerate-ai-line':
         final Future<void> Function(int index)? regenerate =
