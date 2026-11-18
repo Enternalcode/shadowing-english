@@ -52,6 +52,7 @@ import 'widgets/player_top_bar.dart';
 import 'widgets/player_transcript_panel.dart';
 import 'widgets/player_video_panel.dart';
 import 'widgets/pronunciation_assessment_dialog.dart';
+import 'widgets/zoomable_image_surface.dart';
 
 class PadPortraitPlayerScreen extends ConsumerStatefulWidget {
   const PadPortraitPlayerScreen({
@@ -2109,6 +2110,13 @@ class _PadPortraitPlayerScreenState
   }
 
   Widget? _buildVideoSurface() {
+    // Image-backed lessons (text import with a screenshot) show the real
+    // image — zoomable — instead of the mp4's baked still frame. The mp4
+    // keeps playing as the audio source underneath.
+    final String? cover = findCoverImageForVideo(_videoAsset);
+    if (cover != null) {
+      return ZoomableImageSurface(imagePath: cover);
+    }
     final VideoController? controller = _videoController;
     if (controller == null) {
       return null;

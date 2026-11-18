@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show PathMetric;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,6 +51,7 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
   List<TextEditingController> _sentenceCtrls = <TextEditingController>[];
   String _voice = 'qingchunshaonv';
   String? _imagePath;
+  bool _dragging = false;
   String? _targetCourseId;
   bool _splitDone = false;
   bool _generating = false;
@@ -483,41 +486,10 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
           ],
         ),
         const SizedBox(height: 8),
+        _buildImageZone(),
+        const SizedBox(height: 8),
         Row(
           children: <Widget>[
-            OutlinedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.image_rounded, size: 16),
-              label: Text(_imagePath == null ? '配图（可选）' : '换图'),
-            ),
-            const SizedBox(width: 6),
-            Tooltip(
-              message: '粘贴剪贴板里的截图/图片（Ctrl+Shift+V）',
-              child: OutlinedButton.icon(
-                onPressed: _pasteClipboardImage,
-                icon: const Icon(Icons.content_paste_rounded, size: 16),
-                label: const Text('贴图'),
-              ),
-            ),
-            if (_imagePath != null) ...<Widget>[
-              const SizedBox(width: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.file(
-                  File(_imagePath!),
-                  width: 56,
-                  height: 36,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              IconButton(
-                iconSize: 16,
-                tooltip: '移除配图',
-                onPressed: () => setState(() => _imagePath = null),
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ],
-            const Spacer(),
             TextButton.icon(
               onPressed: _generating
                   ? null
@@ -525,6 +497,7 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
               icon: const Icon(Icons.arrow_back_rounded, size: 16),
               label: const Text('重贴文本'),
             ),
+            const Spacer(),
             FilledButton.icon(
               onPressed: _generating ? null : _generate,
               icon: const Icon(Icons.graphic_eq_rounded, size: 16),
@@ -547,6 +520,167 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
           ),
         if (_error != null) _ErrorText(_error!),
       ],
+    );
+  }
+
+  static bool _isImageFile(String path) {
+    const List<String> exts = <String>[
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.webp',
+      '.bmp',
+    ];
+    final String lower = path.toLowerCase();
+    return exts.any(lower.endsWith);
+  }
+
+  /// Full-width dashed drop target for the lesson cover: accepts dragged
+  /// image files, tap-to-browse, and clipboard paste in one place.
+  Widget _buildImageZone() {
+    final bool hasImage = _imagePath != null;
+    final Color border = _dragging
+        ? AppDesignTokens.brandGreen
+        : const Color(0xFFC4CDD9);
+    return DropTarget(
+      onDragDone: (DropDoneDetails details) {
+        setState(() => _dragging = false);
+        final XFile? file = details.files.firstOrNull;
+        if (file == null) {
+          return;
+        }
+        if (_isImageFile(file.path)) {
+          setState(() {
+            _imagePath = file.path;
+            _error = null;
+          });
+        } else {
+          setState(() => _error = '拖入的不是图片文件');
+        }
+      },
+      onDragEntered: (_) => setState(() => _dragging = true),
+      onDragExited: (_) => setState(() => _dragging = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        height: 88,
+        decoration: BoxDecoration(
+          color: _dragging
+              ? AppDesignTokens.brandGreen.withValues(alpha: 0.08)
+              : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: CustomPaint(
+          painter: _DashedBorderPainter(color: border, radius: 12),
+          child: hasImage ? _filledImageZone() : _emptyImageZone(),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyImageZone() {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: _pickImage,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Icon(
+            _dragging
+                ? Icons.download_rounded
+                : Icons.add_photo_alternate_rounded,
+            size: 26,
+            color: _dragging
+                ? AppDesignTokens.brandGreen
+                : AppDesignTokens.textSecondary,
+          ),
+          const SizedBox(width: 10),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                _dragging ? '松手放图' : '拖拽截图/图片到这里',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                '帖子配图会成为课程画面（可选）',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: AppDesignTokens.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          OutlinedButton(
+            onPressed: _pickImage,
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+            ),
+            child: const Text('选图'),
+          ),
+          const SizedBox(width: 6),
+          FilledButton.tonalIcon(
+            onPressed: _pasteClipboardImage,
+            icon: const Icon(Icons.content_paste_rounded, size: 15),
+            label: const Text('贴图'),
+            style: FilledButton.styleFrom(visualDensity: VisualDensity.compact),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filledImageZone() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.file(
+              File(_imagePath!),
+              width: 104,
+              height: 64,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  '配图就绪',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _imagePath!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppDesignTokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: _pickImage, child: const Text('换图')),
+          IconButton(
+            iconSize: 18,
+            tooltip: '移除配图',
+            onPressed: () => setState(() => _imagePath = null),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
     );
   }
 
@@ -597,4 +731,36 @@ class _ErrorText extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  const _DashedBorderPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+    final Path path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)),
+      );
+    const double dash = 6;
+    const double gap = 4;
+    for (final PathMetric metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        canvas.drawPath(metric.extractPath(distance, distance + dash), paint);
+        distance += dash + gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedBorderPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }

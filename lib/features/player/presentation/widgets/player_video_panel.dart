@@ -15,6 +15,7 @@ import '../player_mock_state.dart';
 import '../player_native_subtitles.dart';
 import 'player_ab_timeline.dart';
 import 'subtitle_word_highlight_style.dart';
+import 'zoomable_image_surface.dart';
 
 class PlayerVideoPanel extends StatefulWidget {
   const PlayerVideoPanel({
@@ -408,9 +409,17 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
     );
   }
 
+  /// True while the surface is an interactive image: it owns drag/wheel
+  /// gestures itself, so player seek/volume/brightness drags are disabled.
+  bool get _surfaceIsInteractive => widget.videoSurface is ZoomableImageSurface;
+
   void _handlePointerDown(PointerDownEvent event) {
     _keyboardFocusNode.requestFocus();
     _gestureMode = null;
+    if (_surfaceIsInteractive) {
+      _gestureStartLocalPosition = null;
+      return;
+    }
     final RenderObject? dock = _controlDockKey.currentContext
         ?.findRenderObject();
     final bool touchingControls =

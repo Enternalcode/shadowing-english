@@ -89,6 +89,7 @@ dependencies:
   record: ^7.1.2
   flutter_secure_storage: ^10.3.4
   pasteboard: ^0.6.1
+  desktop_drop: ^0.8.4
 
 
 dev_dependencies:
