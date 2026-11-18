@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:pasteboard/pasteboard.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../import_course/domain/import_match.dart';
@@ -117,6 +118,51 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
       ],
     );
     if (file != null) setState(() => _imagePath = file.path);
+  }
+
+  /// Reads an image straight off the system clipboard (Win+Shift+S
+  /// screenshots etc.) and stores it under the temp dir for packaging.
+  Future<void> _pasteClipboardImage() async {
+    try {
+      final Uint8List? bytes = await Pasteboard.image;
+      if (bytes != null && bytes.isNotEmpty) {
+        final Directory tmp = await getTemporaryDirectory();
+        final String path =
+            '${tmp.path}${Platform.pathSeparator}text_import_clip'
+            '_${DateTime.now().millisecondsSinceEpoch}.png';
+        await File(path).writeAsBytes(bytes);
+        setState(() {
+          _imagePath = path;
+          _error = null;
+        });
+        return;
+      }
+      // Copied an image FILE in Explorer rather than image pixels.
+      const Set<String> imageExts = <String>{
+        '.jpg',
+        '.jpeg',
+        '.png',
+        '.webp',
+        '.bmp',
+      };
+      final List<String> files = await Pasteboard.files();
+      final String? fileImage = files
+          .where(
+            (String f) =>
+                imageExts.any((String e) => f.toLowerCase().endsWith(e)),
+          )
+          .firstOrNull;
+      if (fileImage != null && File(fileImage).existsSync()) {
+        setState(() {
+          _imagePath = fileImage;
+          _error = null;
+        });
+        return;
+      }
+      setState(() => _error = '剪贴板里没有图片（先 Win+Shift+S 截图再点）');
+    } catch (e) {
+      setState(() => _error = '读取剪贴板图片失败：$e');
+    }
   }
 
   List<String> get _sentences => _sentenceCtrls
@@ -247,39 +293,51 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680, maxHeight: 640),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  const Icon(Icons.edit_note_rounded, size: 22),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '文本录入 → 生成听力课',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: _generating
-                        ? null
-                        : () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: _doneMessage != null
-                    ? _buildDone()
-                    : _splitDone
-                    ? _buildSentenceEditor()
-                    : _buildPasteArea(),
-              ),
-            ],
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(
+            LogicalKeyboardKey.keyV,
+            control: true,
+            shift: true,
+          ): _pasteClipboardImage,
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680, maxHeight: 640),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Icon(Icons.edit_note_rounded, size: 22),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '文本录入 → 生成听力课',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: _generating
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: _doneMessage != null
+                      ? _buildDone()
+                      : _splitDone
+                      ? _buildSentenceEditor()
+                      : _buildPasteArea(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -431,6 +489,15 @@ class _TextImportDialogState extends ConsumerState<TextImportDialog> {
               onPressed: _pickImage,
               icon: const Icon(Icons.image_rounded, size: 16),
               label: Text(_imagePath == null ? '配图（可选）' : '换图'),
+            ),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: '粘贴剪贴板里的截图/图片（Ctrl+Shift+V）',
+              child: OutlinedButton.icon(
+                onPressed: _pasteClipboardImage,
+                icon: const Icon(Icons.content_paste_rounded, size: 16),
+                label: const Text('贴图'),
+              ),
             ),
             if (_imagePath != null) ...<Widget>[
               const SizedBox(width: 8),
