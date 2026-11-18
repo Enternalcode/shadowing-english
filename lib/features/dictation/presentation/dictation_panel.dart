@@ -312,9 +312,12 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       _backspace();
       return KeyEventResult.handled;
     }
-    final String label = key.keyLabel;
-    if (label.length == 1 && _isLetterRune(label.codeUnitAt(0))) {
-      _typeChar(label.toLowerCase());
+    // event.character carries the produced char with Shift/CapsLock
+    // resolved by the OS — display exactly what the user typed; scoring
+    // already compares case-insensitively.
+    final String? ch = event.character;
+    if (ch != null && ch.length == 1 && _isLetterRune(ch.codeUnitAt(0))) {
+      _typeChar(ch);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
