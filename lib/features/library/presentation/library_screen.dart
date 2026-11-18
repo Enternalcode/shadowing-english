@@ -20,6 +20,7 @@ import '../../shared/presentation/pad/app_design_tokens.dart';
 import '../../shared/presentation/pad/pad_compact.dart';
 import '../../shared/presentation/pad/pad_scaffold.dart';
 import '../../shared/presentation/pad/pad_top_bar.dart';
+import '../../text_import/presentation/text_import_dialog.dart';
 import '../../words/data/offline_word_dictionary.dart';
 import 'library_catalog_provider.dart';
 import 'library_mock_data.dart';
@@ -748,6 +749,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                       ),
                       const SizedBox(width: 8),
                     ],
+                    OutlinedButton.icon(
+                      onPressed: editMode
+                          ? null
+                          : () => TextImportDialog.show(context),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 18,
+                        ),
+                      ),
+                      icon: const Icon(Icons.edit_note_rounded, size: 18),
+                      label: const Text(
+                        '文本录入',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     FilledButton.icon(
                       onPressed: editMode
                           ? null
