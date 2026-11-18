@@ -33,6 +33,7 @@ docs/
 .pub/
 /build/
 **/build/
+/dist/
 
 # Android related
 **/gradle-wrapper.jar

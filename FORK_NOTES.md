@@ -52,3 +52,21 @@ rebase 更适合要回提上游的场景。
 - 不用 FVM 也行：直接用该目录下的 `bin\flutter.bat`。
 - Windows 桌面构建需 Visual Studio（已装 `D:\Softwares\Microsoft Visual Studio`）。
 - 首跑：`bin\flutter.bat pub get` → `bin\flutter.bat run -d windows`。
+
+## 分发（给家里电脑/手机装）
+
+- **Windows**：`flutter build windows --release` → 打包 `build\windows\x64\runner\Release`
+  **整个目录**为 `shadowing-english-<x.y.z>-windows-x64.zip`（exe 单独拿不出，需带 dll + data）。
+  产物放 `dist/`（已 gitignore）。同目录生成 `SHA256SUMS.txt`（`sha256  文件名` 两空格格式）。
+- **应用内更新**：`app_update_service_native.dart` 的 `_releasesUrl` 已指向本 fork
+  （`Enternalcode/shadowing-english`）。在 fork 上发 Release（tag `v<x.y.z>`，附件传 zip +
+  `SHA256SUMS.txt`），其他设备在「设置 → 检查更新」即可一键下载升级。
+  **版本号规则**：tag/asset 只认纯 `x.y.z`（正则 `\d+(\.\d+){2}`），不能带 `-fork` 后缀；
+  且只有比已装版本号大才会提示更新——fork 发版时 pubspec version 需递增（如 0.3.3、0.4.0）。
+  切勿指回上游：上游发版更勤，会把 fork 功能覆盖掉。
+- **离线数据**：词典已打进包（`assets/dictionary/`：ECDICT 4.3MB + 词图 7.7MB），
+  字体/音效/翻译同理，新机器解压即用、断网可查词。
+  联网功能另需各自 API key：StepFun（精讲/句式/ASR/TTS 造课）、翻译接口——key 存于
+  Hive `prefs` box，**新机需重新填一次**（设置 → 翻译 / ASR）。
+- **课程数据**存于应用支持目录（`imported_sources/` 等），不随包分发；
+  跨机迁移课程需另行导出/拷贝，或在新机重新导入/录入。
