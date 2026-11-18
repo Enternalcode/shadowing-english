@@ -293,6 +293,14 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       return KeyEventResult.ignored;
     }
     final LogicalKeyboardKey key = event.logicalKey;
+    if (key == LogicalKeyboardKey.space) {
+      // Spaces don't belong to the letter stream — swallow the press with
+      // just a key click for feel; it must NOT reach the replay shortcut.
+      // Still counts as a typing gesture: pause the entry-loop audio.
+      _keySound(true);
+      widget.onTypingStarted?.call();
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
       _primaryAction();
@@ -625,8 +633,6 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.tab): () =>
             widget.onReplayLine(),
-        const SingleActivator(LogicalKeyboardKey.space): () =>
-            widget.onReplayLine(),
         const SingleActivator(LogicalKeyboardKey.tab, shift: true): () {
           if (_pos > 0) _openPos(_pos - 1);
         },
@@ -667,7 +673,7 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
                   icon: const Icon(Icons.skip_previous_rounded),
                 ),
                 IconButton(
-                  tooltip: '重播本句 (Tab/空格)',
+                  tooltip: '重播本句 (Tab)',
                   onPressed: widget.onReplayLine,
                   icon: const Icon(Icons.replay_rounded),
                 ),
@@ -699,8 +705,8 @@ class _DictationPanelState extends ConsumerState<DictationPanel> {
               _checked
                   ? '敲字母继续重练 · Ctrl+R 回到横线 · Enter 下一句'
                   : _showSubtitles
-                  ? '敲键盘输入（错键弹回）；Tab/空格 重播 · Enter 校验 · Ctrl+R 重练'
-                  : '盲听后敲键盘（错键弹回）；Tab/空格 重播 · Enter 校验 · Ctrl+R 重练 · Shift+Tab 上一句',
+                  ? '敲键盘输入（错键弹回）；Tab 重播 · Enter 校验 · Ctrl+R 重练'
+                  : '盲听后敲键盘（错键弹回）；Tab 重播 · Enter 校验 · Ctrl+R 重练 · Shift+Tab 上一句',
               style: const TextStyle(
                 fontSize: 12,
                 color: AppDesignTokens.textSecondary,
