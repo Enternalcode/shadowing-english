@@ -1511,10 +1511,12 @@ class _PlayerVideoPanelState extends State<PlayerVideoPanel> {
                 entry.key == widget.currentWordIndex;
             return Builder(
               builder: (BuildContext tokenContext) {
-                return GestureDetector(
+                return InkWell(
                   key: ValueKey<String>('video-subtitle-word-${entry.key}'),
-                  behavior: HitTestBehavior.opaque,
                   onTap: () => _openSubtitleLookup(tokenContext, entry.value),
+                  borderRadius: BorderRadius.circular(7),
+                  mouseCursor: SystemMouseCursors.click,
+                  hoverColor: Colors.white.withValues(alpha: 0.22),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 5,

@@ -1031,6 +1031,10 @@ class _PlayerSubtitleListState extends State<PlayerSubtitleList> {
                     contextTime,
                   ),
                   borderRadius: BorderRadius.circular(8),
+                  mouseCursor: SystemMouseCursors.click,
+                  hoverColor: AppDesignTokens.brandGreen.withValues(
+                    alpha: 0.18,
+                  ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 3,

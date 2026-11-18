@@ -159,7 +159,9 @@ class _WordLookupPopupCardState extends ConsumerState<WordLookupPopupCard> {
         }
         return;
       } catch (_) {
-        // Fall through to TTS when the recording cannot play.
+        // Fall through to TTS — stop first in case the stream half-started
+        // (a partially-opened source would otherwise overlap the TTS voice).
+        unawaited(_audioPlayer.stop());
       }
     }
 

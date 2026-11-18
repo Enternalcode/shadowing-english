@@ -1159,13 +1159,12 @@ class _SlotLine extends StatelessWidget {
       groups.add(
         onWordTap == null
             ? group
-            : GestureDetector(
-                behavior: HitTestBehavior.opaque,
+            : InkWell(
                 onTap: () => onWordTap!(word),
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: group,
-                ),
+                borderRadius: BorderRadius.circular(6),
+                mouseCursor: SystemMouseCursors.click,
+                hoverColor: const Color(0xFF46A302).withValues(alpha: 0.14),
+                child: group,
               ),
       );
     }

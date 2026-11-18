@@ -1033,9 +1033,10 @@ class _WordMeaningTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        hoverColor: AppDesignTokens.brandGreen.withValues(alpha: 0.14),
         child: AnimatedContainer(
           key: ValueKey<String>('reader-word-box-$token-$active'),
           duration: const Duration(milliseconds: 160),

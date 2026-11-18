@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/presentation/pad/app_design_tokens.dart';
+import '../../../shared/presentation/tappable_word_text.dart';
 import '../../data/line_pattern_store.dart';
 import '../../data/pattern_book_provider.dart';
 import '../../domain/sentence_pattern.dart';
@@ -158,6 +159,44 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
     );
   }
 
+  void _openWordLookup(String token) => showWordLookupDialog(
+    context,
+    ref,
+    word: token,
+    contextSentence: widget.sentence,
+    episodeId: widget.episodeId,
+  );
+
+  /// Bold CJK label followed by a word-tappable body — the AI writes grammar /
+  /// slot notes mixing Chinese labels with English words ("介词 for 的宾语"),
+  /// so every latin token inside is clickable for the dictionary card.
+  Widget _tappableLabeled(
+    String label,
+    String body,
+    TextStyle bodyStyle, {
+    Color labelColor = AppDesignTokens.brandGreenDark,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: bodyStyle.copyWith(
+            fontWeight: FontWeight.w800,
+            color: labelColor,
+          ),
+        ),
+        Expanded(
+          child: TappableWordText(
+            text: body,
+            style: bodyStyle,
+            onWordTap: _openWordLookup,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _expandedBody(LinePatternNote? note, bool pending, String? error) {
     if (note == null) {
       return Column(
@@ -213,41 +252,31 @@ class _LinePatternSectionState extends ConsumerState<LinePatternSection> {
         ),
         if (note.slots.isNotEmpty) ...<Widget>[
           const SizedBox(height: 4),
-          Text(
-            '套入：${note.slots}',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppDesignTokens.textSecondary,
-            ),
+          _tappableLabeled(
+            '套入：',
+            note.slots,
+            const TextStyle(fontSize: 12, color: AppDesignTokens.textSecondary),
           ),
         ],
         if (note.explanation.isNotEmpty) ...<Widget>[
           const SizedBox(height: 6),
-          Text(
-            note.explanation,
+          TappableWordText(
+            text: note.explanation,
             style: const TextStyle(fontSize: 12.5, height: 1.5),
+            onWordTap: _openWordLookup,
           ),
         ],
         if (note.grammar.isNotEmpty) ...<Widget>[
           const SizedBox(height: 5),
-          RichText(
-            text: TextSpan(
-              style: const TextStyle(
-                fontSize: 12,
-                height: 1.5,
-                color: AppDesignTokens.textSecondary,
-              ),
-              children: <TextSpan>[
-                const TextSpan(
-                  text: '语法：',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF7C5E10),
-                  ),
-                ),
-                TextSpan(text: note.grammar),
-              ],
+          _tappableLabeled(
+            '语法：',
+            note.grammar,
+            const TextStyle(
+              fontSize: 12,
+              height: 1.5,
+              color: AppDesignTokens.textSecondary,
             ),
+            labelColor: const Color(0xFF7C5E10),
           ),
         ],
         const SizedBox(height: 8),

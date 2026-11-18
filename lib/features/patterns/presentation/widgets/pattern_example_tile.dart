@@ -7,7 +7,7 @@ import '../../../settings/presentation/settings_provider.dart';
 import '../../../shared/data/word_lookup_service.dart';
 import '../../../shared/data/word_pronunciation_service.dart';
 import '../../../shared/presentation/pad/app_design_tokens.dart';
-import '../../../shared/presentation/word_lookup_popup.dart';
+import '../../../shared/presentation/tappable_word_text.dart';
 
 /// One generated drill example: numbered English sentence whose words are
 /// individually tappable — tap a word to open the same dictionary card used
@@ -35,39 +35,13 @@ class _PatternExampleTileState extends ConsumerState<PatternExampleTile> {
   bool _translating = false;
   bool _expanded = false;
 
-  /// Strips edge punctuation for lookup while the original token stays on
-  /// screen — "brewing." → brewing, "shop's" → shop's.
-  String _lookupWord(String token) =>
-      token.replaceAll(RegExp(r"^[^\w'-]+|[^\w'-]+$"), '');
-
-  void _openWordLookup(String token) {
-    final String word = _lookupWord(token);
-    if (word.isEmpty) return;
-    unawaited(
-      showDialog<void>(
-        context: context,
-        builder: (BuildContext dialogContext) => Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: WordLookupPopupCard.preferredWidth + 16,
-              maxHeight: 560,
-            ),
-            child: WordLookupPopupCard(
-              rawWord: word,
-              contextSentence: widget.sentence,
-              episodeId: widget.episodeId,
-              onClose: () => Navigator.of(dialogContext).pop(),
-              onPronounce: () => unawaited(
-                ref.read(wordPronunciationServiceProvider).speak(word),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  void _openWordLookup(String token) => showWordLookupDialog(
+    context,
+    ref,
+    word: token,
+    contextSentence: widget.sentence,
+    episodeId: widget.episodeId,
+  );
 
   Future<void> _toggleTranslation() async {
     if (_translating) return;
@@ -95,10 +69,6 @@ class _PatternExampleTileState extends ConsumerState<PatternExampleTile> {
 
   @override
   Widget build(BuildContext context) {
-    final List<String> tokens = widget.sentence
-        .split(' ')
-        .where((String t) => t.isNotEmpty)
-        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -114,16 +84,10 @@ class _PatternExampleTileState extends ConsumerState<PatternExampleTile> {
             ),
             const SizedBox(width: 6),
             Expanded(
-              child: Wrap(
-                spacing: 1,
-                runSpacing: 1,
-                children: <Widget>[
-                  for (final String token in tokens)
-                    _WordToken(
-                      token: token,
-                      onTap: () => _openWordLookup(token),
-                    ),
-                ],
+              child: TappableWordText(
+                text: widget.sentence,
+                style: const TextStyle(fontSize: 13, height: 1.4),
+                onWordTap: _openWordLookup,
               ),
             ),
             _IconAction(
@@ -161,34 +125,6 @@ class _PatternExampleTileState extends ConsumerState<PatternExampleTile> {
                   ),
           ),
       ],
-    );
-  }
-}
-
-class _WordToken extends StatelessWidget {
-  const _WordToken({required this.token, required this.onTap});
-
-  final String token;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 1.5, vertical: 1),
-        child: Text(
-          token,
-          style: const TextStyle(
-            fontSize: 13,
-            height: 1.4,
-            decoration: TextDecoration.underline,
-            decorationStyle: TextDecorationStyle.dotted,
-            decorationColor: Color(0xFF9DB8A6),
-          ),
-        ),
-      ),
     );
   }
 }
